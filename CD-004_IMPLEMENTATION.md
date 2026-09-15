@@ -54,7 +54,33 @@
 (تُضاف بعد كل بند)
 
 ### بند 1 — فحص `users.status` بعد `password_verify`
-*بانتظار التنفيذ*
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-15 |
+| الحالة | **مكتمل** |
+| الملفات | `app/Controllers/AuthController.php`، `tests/cases/Core/AuthTest.php` |
+
+**التنفيذ:**
+- في `AuthController::login()` بعد نجاح `password_verify` (وبعد مسح/تسجيل المحاولة الناجحة) أُضيف فحص `$userCheck->status`:
+  - `active`: يُكمل تدفق الدخول الحالي إلى `/dashboard`.
+  - `suspended`: رفض + `Audit::log('USER_LOGIN_SUSPENDED', id, 'users', {username})` + `Auth::notifyAdmins('محاولة دخول بحساب موقوف — …')` + فلاش «تم تعليق حسابك…» + توجيه إلى `/login`.
+  - `invited`: رفض + `Audit::log('USER_LOGIN_INVITED', id, 'users', {username})` + `Auth::notifyAdmins('محاولة دخول بحساب غير مفعَّل — …')` + فلاش «لم يتم تفعيل حسابك بعد…» + توجيه إلى `/login`.
+- **قرار داخل البند:** تدفق `invited` الكامل (شاشة تعيين كلمة المرور + التوجيه الإجباري) مؤجل إلى **بند 10**؛ في هذا البند يُرفض الدخول لكلا الحالتين. لا توجد شاشة تعيين كلمة مرور ولا مسار لها في `routes/web.php` حاليًا.
+- المساعد العام `Auth::notifyAdmins(title, message)` (أُضيف مسبقًا كخطوة أولى للبند) هو مسار الإشعار الموحّد، ويُعيد استخدامه بند 2 أيضًا (`notifyLoginLocked`).
+
+**الإثبات:**
+- `php -l` للملفين: لا أخطاء. ✔
+- `AuthTest` **27/27 نجاح** (3 اختبارات جديدة عبر عملية فرعية مع بذر مستخدمين مؤقتين وقراءة أثر التنفيذ):
+  - `testLoginRejectsSuspendedAccount` — كلمة مرور صحيحة + `status=suspended` → لا جلسة (`SESSION_USER_ID=none`) + فلاش الرفض + `USER_LOGIN_SUSPENDED` + إشعار لمشرف نشط (role_id=1). ✔
+  - `testLoginRejectsInvitedAccount` — نفسه مع `invited` + `USER_LOGIN_INVITED`. ✔
+  - `testLoginContinuesForActiveAccount` — `active` → جلسة مؤمّنة (`SESSION_USER_ID=<id>`) بلا فلاش + `USER_LOGIN_SUCCESS`. ✔
+  - تنظيف تلقائي في `tearDown` (بذر معزول بأسماء `cd004.*`)؛ شُغِّل الاختبار **مرتين متتاليتين** → 27/27 وبلا أي صفوف متبقية (تحقق SQL: users=0, login_attempts=0, notifications=0). ✔
+- **Live HTTP** (Apache/MySQL، نموذج الدخول الحقيقي مع توكن CSRF): ثلاثة مستخدمين مؤقتين (suspended/invited/active) بكلمة مرور صحيحة →
+  - suspended: `302 → /login` + `ACTION_USER_LOGIN_SUSPENDED=1` + `NOTIF=1`.
+  - invited: `302 → /login` + `ACTION_USER_LOGIN_INVITED=1` + `NOTIF=1`.
+  - active (ضبط موجب): `302 → /dashboard` + `ACTION_USER_LOGIN_SUCCESS=1` + `NOTIF=0`.
+  - تنظيف: `USERS=0` → **PASS**. ✔
+- انحدار خفيف: `DatabaseTest` 4/5 و`HelpersTest` 2/3 (نفس الفشلين السابقين الموثقين في OUT_OF_SCOPE) — بلا انحدار جديد. ✔
 
 ### بند 2 — قفل محاولات الدخول
 | الحقل | القيمة |

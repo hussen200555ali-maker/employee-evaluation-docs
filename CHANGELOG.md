@@ -1,5 +1,10 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-15 — CD-004 بند 1: فحص users.status بعد password_verify (شيفرة المصدر في جذر المشروع)
+- `app/Controllers/AuthController.php` — بعد نجاح كلمة المرور: `active` يكمل الدخول؛ `suspended`/`invited` يُرفضان مع `Audit::log` (`USER_LOGIN_SUSPENDED`/`USER_LOGIN_INVITED`) وإشعار `Auth::notifyAdmins` وفلاش وتوجيه `/login`. تدفق `invited` الكامل مؤجل إلى بند 10.
+- `tests/cases/Core/AuthTest.php` — 3 اختبارات (رفض suspended/رفض invited/قبول active) عبر عملية فرعية + بذر/تنظيف مستخدمين مؤقتين.
+- إثبات: `php -l` + `AuthTest` 27/27 (مرتان، بلا بقايا) + Live HTTP (suspended/invited → /login مع Audit+إشعار؛ active → /dashboard) PASS. التفاصيل في `CD-004_IMPLEMENTATION.md`.
+
 ## 2026-09-15 — CD-004 بند 2: قفل محاولات الدخول (شيفرة المصدر في جذر المشروع)
 - `app/Core/Auth.php` — ثوابت ومساعدات القفل (`MAX_LOGIN_ATTEMPTS=5`, `LOCKOUT_WINDOW_SECONDS=900`, `countLoginFailures`, `isLoginLocked`, `logLoginAttempt`, `clearLoginAttempts`, `loginDelaySeconds`, `notifyLoginLocked`) عبر جدول `login_attempts` المترحّل (بند 0).
 - `app/Controllers/AuthController.php` — منع الدخول قبل التحقق للحساب المقفول؛ تسجيل الفشل + تأخير متدرج 1/2/4/8ث؛ القفل عند 5 فاشلة/15د مع `USER_LOGIN_LOCKED` وإشعار محذر لـAdmin؛ النجاح يمسح المحاولات.
