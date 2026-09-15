@@ -57,7 +57,26 @@
 *بانتظار التنفيذ*
 
 ### بند 2 — قفل محاولات الدخول
-*بانتظار التنفيذ*
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-15 |
+| الحالة | **مكتمل** |
+| الملفات | `app/Core/Auth.php`، `app/Controllers/AuthController.php`، `tests/cases/Core/AuthTest.php` |
+
+**التنفيذ:**
+- `Auth` (دوال ثابتة جديدة + ثوابت): `MAX_LOGIN_ATTEMPTS=5`، `LOCKOUT_WINDOW_SECONDS=900` (15 دقيقة)، `countLoginFailures(username)`، `isLoginLocked(username)`، `logLoginAttempt(username, success, userId)` (تخزين username+IP في `login_attempts`)، `clearLoginAttempts(username)`، `loginDelaySeconds(priorFailures)` (تأخير متدرج 1/2/4/8 ثوانٍ بسقف 8)، `notifyLoginLocked(username)` (إشعار نوع `warning` لجميع أدوار Admin النشطة — نفس نهج CsrfGraceLogger).
+- `AuthController::login()`:
+  - قبل التحقق من الاعتمادات: إذا كان الحساب مقفولًا → رفض + `Audit::log('USER_LOGIN_LOCKED_BLOCKED')` + فلاش + توجيه (بدون تسجيل محاولة جديدة).
+  - عند الفشل: يُحسب عدد المحاولات السابقة ثم يُسجَّل فشل جديد؛ عند بلوغ العتبة (5) → `Audit::log('USER_LOGIN_LOCKED')` + `notifyLoginLocked` + فلاش القفل، وإلا فلاش الاعتمادات الخاطئة؛ ثم `sleep` بالتأخير المتدرج قبل الرد (أوقات فعلية رُصدت: 1/2/4/8/8 ثانية).
+  - عند النجاح: `clearLoginAttempts` + `logLoginAttempt(..., true)` ثم التدفق الحالي (مسح الجلسة/أدوار/صلاحيات/Audit).
+- إعادة صياغة استخراج `username` بـ`trim` (اتساق مفتاح القفل).
+
+**قرار داخل البند:** مفتاح القفل هو `username` (حماية الحساب) بغض النظر عن IP؛ يُخزَّن IP في السجلات للتحقيق.
+
+**الإثبات:**
+- `php -l` للملفات الثلاثة: لا أخطاء. ✔
+- `AuthTest` **24/24 نجاح** (3 اختبارات جديدة: تسلسل التأخير، العد/القفل/المسح، مسح عند النجاح). ✔
+- **Live HTTP**: 5 طلبات POST بـاعتمادات خاطئة وتوكن صحيح → failCount 1→5، أوقات ~1.1/2.1/4.1/8.1/8.1 ثانية؛ بعد الخامسة: إشعار في `notifications` (title يحوي اسم المستخدم، type=warning للمشرفين)؛ الطلبان #6 و#7 → فشل **مُحصَّل** (failCount يبقى 5 — لا محاولة جديدة على المسار المقفول) → PASS. تنظيف السجلات والإشعارات التجريبية بعد الاختبار. ✔
 
 ### بند 3 — CSRF صفحة الدخول
 | الحقل | القيمة |
