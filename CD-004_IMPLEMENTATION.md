@@ -60,7 +60,26 @@
 *بانتظار التنفيذ*
 
 ### بند 3 — CSRF صفحة الدخول
-*بانتظار التنفيذ*
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-15 |
+| الحالة | **مكتمل** |
+| الملفات | `app/Core/Auth.php`، `app/Views/auth/login.php`، `tests/cases/Core/AuthTest.php` |
+
+**التنفيذ:**
+- `Auth::generateCsrfToken()`: أصبح يعمل **قبل المصادقة** — أُزيل `if (!self::check()) return '';` المبكّر؛ يعيد استخدام توكن الجلسة الحالي طالما لم تنتهِ صلاحيته (يمنع إبطال توكنات الصفحات الأخرى)؛ تخزين DB (`csrf_tokens`) محصور داخل `self::check()` (الجدول يتطلب `user_id`) مع try/catch للنسخة غير المنتقلة.
+- `Auth::validateCsrfToken()`: يتحقق من **الجلسة أولًا** (يعمل قبل المصادقة لتوكن صفحة الدخول)، ثم DB كطبقة ثانية للمستخدمين المسجّلين فقط.
+- `enforceCsrfToken()`: أُزيل `'login'` من `$skipRoutes` — أصبح `['register', 'forgot-password', 'reset-password']` وبه تعليق يوثق بند 3 (POST /login الآن يخضع للتحقق من CSRF)؛ الاستثناءات المتبقية لمسارات ما قبل المصادقة التي تولّد توكناتها داخل صفحاتها، ولـ`api/`.
+- `app/Views/auth/login.php`: أُضيف `csrf_field()` داخل نموذج POST — يولّد التوكن قبل المصادقة.
+
+**لازم وظيفي (اختبارات):**
+- `AuthTest::testEnforceCsrfTokenSkipsLoginPost` كان يختبر السلوك القديم (تخطي POST /login)؛ بعد بند 3 صار `enforceCsrfToken` يرفض الطلب بلا توكن ويدعو `exit()` (Auth.php:235) فيُنهي **مشغّل الاختبارات كلها** بصمت (خروج 0 بلا أي إخراج) — هذا سبب «اختفت مخرجات runner.php». استُبدل الاختبار باختبارين للسلوك الجديد: `testEnforceCsrfTokenAllowsLoginPostWithValidToken` (توكن صحيح يمرّ) و`testEnforceCsrfTokenRejectsLoginPostWithoutToken` (رفض بلا توكن عبر عملية فرعية — لا يصل تنفيذ ما بعد الرفض).
+
+**الإثبات:**
+- `php -l` لـ `Auth.php` و`login.php` و`AuthTest.php`: لا أخطاء. ✔
+- محاكاة توكن ما قبل المصادقة (سكربت تجريبي): طول 64، إعادة استخدام `reuse_same=yes`، تحقق صحيح `validate_ok=yes`، تحقق خاطئ مرفوض `validate_bad=rejected` → PASS. ✔
+- **Live HTTP** (Apache/MySQL): GET /login → 200 ويحوي `name="_token"` بقيمة 64-سداسي عشرية (csrffield يُرسم قبل المصادقة)؛ إعادة استخدام التوكن عبر إعادة تحميل الصفحة (REUSE_SAME=True)؛ POST /login **بتوكن صحيح** → 302 → `/login` (وصل لفحص الاعتمادات — مرّ من بوابة CSRF)؛ POST **بلا توكن** أو **بتوكن خاطئ** → 302 → `/evaluations/excel/import` (رفض CSRF كما هو محدد بلا HTTP_REFERER). ✔
+- `AuthTest` **21/21 نجاح** (بعد تحديث الاختبارات للسلوك الجديد)؛ المجموعة الكاملة: AuthTest 21/21 — مع فشلين سابقين موثقين (`DatabaseTest` 4/5، `HelpersTest` 2/3). ✔
 
 ### بند 4 — الخروج عبر POST
 *بانتظار التنفيذ*
