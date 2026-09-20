@@ -208,7 +208,26 @@
 - نسخ تراجع: `_emergency/rollback/CD-004/2026-09-15/config/config.pre-item6.php`, `app.pre-item6.php`, `performance.pre-item6.php`, `public/index.pre-item6.php`. ✔
 
 ### بند 7 — إصلاح حارس Admin/UserController
-*بانتظار التنفيذ*
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-15 |
+| الحالة | **مكتمل** |
+| الملفات | `app/Controllers/Admin/UserController.php`، `tests/cases/Core/AuthTest.php` |
+
+**التنفيذ:** كان `__construct()` يستدعي `return (new ErrorController())->forbidden();` بلا `exit` — يقصر العمل على الكونستركتور فقط (تُهمَل القيمة المعادة) ويستمر تنفيذ دالة الإدارة المستهدفة بلا تحقق. أُضيف `exit;` بعد `forbidden()` ليتطابق مع النمط الصحيح في `Auth::can()` (عرض 403 ثم إيقاف فوري). وُثّق التعديل بتعليق داخلي يشير للبند 7.
+
+**الإثبات:**
+- `php -l`: لا أخطاء (`UserController.php`, `AuthTest.php`). ✔
+- **AuthTest 29/29** ← اختبار جديد `testAdminUserControllerGuardStopsNonAdmin`:
+  - عملية فرعية بمستخدم **Staff**: `new UserController()` يوقف التنفيذ قبل `index()` (لا `PHASE1_SENTINEL`) ويعرض صفحة 403 ولا يظهر محتوى «إدارة المستخدمين». ✔
+  - عملية فرعية بمستخدم **Admin**: `new UserController()` يمر عبر الحارس (`ADMIN_PASSED`). ✔
+  - ملاحظة آلية: عبّر الاختبار عن حد أقصى لقراءة الأنبوبة في `runCli` (مخرجات HTML كبيرة >4KB تُسدّ stdout pipe عند قراءة stderr أولًا) — عُولج بتمرير `$stdoutFile`، وسُجّل كثمرة معرفة في OUT_OF_SCOPE (البند 8).
+- **Live HTTP** (Apache/MySQL، ببذرة مستخدمين مؤقتة+أدوار):
+  - Staff: تسجيل دخول 302 /dashboard ثم GET `/admin/users` → **403** مع «هذه المساحة ليست ضمن صلاحياتك» دون أي جزء من «إدارة المستخدمين». ✔
+  - Staff: POST `/admin/users/update-role` (دور هدف + توكن سليم) → **403** و**لا** سجل `USER_ROLE_UPDATE` جديد للهدف (0 قبل = 0 بعد). ✔
+  - Admin: GET `/admin/users` → **200** مع «إدارة المستخدمين». ✔
+  - تنظيف: `USERS=0` بعد الحذف. → **PASS**. ✔
+- نسخة تراجع: `_emergency/rollback/CD-004/2026-09-15/UserController.pre-item7.php`. ✔
 
 ### بند 8 — نسخة صلاحيات المستخدم
 *بانتظار التنفيذ*

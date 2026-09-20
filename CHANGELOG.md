@@ -1,5 +1,10 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-16 — CD-004 بند 7: إصلاح حارس Admin/UserController (شيفرة المصدر في جذر المشروع)
+- `app/Controllers/Admin/UserController.php` — `exit;` بعد `forbidden()` داخل `__construct`: سابقًا `return forbidden()` بلا `exit` يترك تنفيذ دالة الإدارة يستمر للمستخدم غير Admin (Remedy A1 §2 أ: الحارس القاصر Google-Bot-accessible).
+- `tests/cases/Core/AuthTest.php` — `testAdminUserControllerGuardStopsNonAdmin` (subprocess: غير-Admin يتوقف عند 403 بلا «إدارة المستخدمين»؛ وAdmin يمر — `ADMIN_PASSED`).
+- الإثبات: `php -l` + `AuthTest` 29/29 + Live HTTP (Staff → GET `/admin/users` 403 بلا محتوى إداري وPOST `update-role` 403 بلا `USER_ROLE_UPDATE`؛ Admin → GET 200 مع الصفحة؛ تنظيف `USERS=0`) PASS. **توثيق:** `CD-004_IMPLEMENTATION.md` (بند 7) + `CD-004_OUT_OF_SCOPE.md` (بند 8: قياس `runCli`).
+
 ## 2026-09-16 — CD-004 بند 6: إخفاء الأخطاء ودمج الإعدادات (شيفرة المصدر في جذر المشروع)
 - `config/config.php` — دمج `app.php` + `performance.php` (ر.ق 1): `memory_limit=2048M`، `max_execution_time=600`، `BACKUP_BATCH_SIZE=100`؛ `DEBUG_MODE=false` + `display_errors=0` + `log_errors=1` + `error_log → storage/logs/php-error.log`؛ `opcache_reset()` مستبعد عمدًا من الدمج.
 - حذف `config/app.php` + `config/performance.php` — لا `require` لهما في أي موضع (متحقق grep قبل/بعد).
