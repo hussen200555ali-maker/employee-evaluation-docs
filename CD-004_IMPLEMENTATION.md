@@ -127,7 +127,29 @@
 - `AuthTest` **21/21 نجاح** (بعد تحديث الاختبارات للسلوك الجديد)؛ المجموعة الكاملة: AuthTest 21/21 — مع فشلين سابقين موثقين (`DatabaseTest` 4/5، `HelpersTest` 2/3). ✔
 
 ### بند 4 — الخروج عبر POST
-*بانتظار التنفيذ*
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-16 |
+| الحالة | **مكتمل** |
+| الملفات | `routes/web.php`، `app/Controllers/AuthController.php`، `app/Views/layouts/header.php`، `tests/cases/Core/AuthTest.php`، `CD-001_delivery/appendices/routes_inventory.txt` |
+
+**التنفيذ (Remedy P2 في وثيقة A1 §3.3):**
+- `routes/web.php`: حُذف `$router->get('logout', ...)` نهائيًا (أصبح GET /logout → 404) واستُبدل بـ`$router->post('logout', ...)` مع تعليق يوثق البند — الخروج الآن عبر POST فقط، ما يمنع Logout-CSRF عبر رابط مُضمَّن.
+- `AuthController::logout()`: `Auth::logout()` (مسح بيانات الجلسة) + `session_destroy()` + **إتلاف كوكي الجلسة صراحةً** عبر `setcookie(session_name(), '', time()-42000, path/domain/secure/httponly)` محروسًا بـ`ini_get('session.use_cookies')` وبقيم `session_get_cookie_params()` (اسم الكوكي الفعلي EVALSESSID بعد بند 5) ثم توجيه `/login`.
+- `app/Views/layouts/header.php`: ربط الخروج في القائمة المنسدلة تحوّل من `<a href>` إلى **نموذج POST** (method=POST، action=APP_URL/logout) مع `csrf_field()` — يُغطَّى تلقائيًا بـ`Auth::enforceCsrfToken()` (public/index.php:37).
+- `CD-001_delivery/appendices/routes_inventory.txt`: سطر المسار حُدِّث إلى POST + تعليق البند.
+- نسخ تراجع: `_emergency/rollback/CD-004/2026-09-15/AuthController.pre-item4.php`, `views/header.pre-item4.php`, `routes/web.pre-item4.php`.
+
+**الإثبات:**
+- `php -l` للملفات الأربعة: لا أخطاء. ✔
+- `AuthTest` **28/28 نجاح** (اختبار جديد `testLogoutRouteIsPostOnly`: عبر Reflection يتحقق من خريطة `$router` أن `GET['logout']` غير موجود وأن `POST['logout']` = `App\Controllers\AuthController@logout`). ✔
+- **Live HTTP** (Apache/MySQL، جلسة حقيقية EVALSESSID): مستخدم مؤقت فاعل →
+  - GET /logout → **404** وبعدها GET /dashboard → **200** (الجلسة سليمة — رابط GET لا يُخرج). ✔
+  - POST /logout **بلا توكن** → 302 → `/evaluations/excel/import` (رفض CSRF كما هو محدد — لا توجيه لدخول) وبعدها GET /dashboard → **200** (الجلسة سليمة). ✔
+  - POST /logout **بتوكن CSRF سليم** (مستخرج من نموذج الخروج المعروض في الـ header) → **302 → /login** مع `Set-Cookie: EVALSESSID=deleted; expires=Thu, 01 Jan 1970 …; Max-Age=0` (كوكي مُتْلَف) وبعدها GET /dashboard → **302 → /login** (الجلسة ملغاة). ✔
+  - تحقق أن نموذج الخروج في الـ header يحوي `action=".../logout"` + `name="_token"` (64 محرفًا). ✔
+  - تنظيف: USERS=0, NOTIF=0, ATTEMPTS=0, USER_ROLES=0, AUDIT=0 → **PASS**. ✔
+- انحدار خفيف: `DatabaseTest` 4/5 و`HelpersTest` 2/3 (الفشلان السابقان الموثقان في OUT_OF_SCOPE) — بلا انحدار جديد. ✔
 
 ### بند 5 — تحصين الجلسة
 | الحقل | القيمة |

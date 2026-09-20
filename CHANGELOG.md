@@ -1,5 +1,13 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-16 — CD-004 بند 4: الخروج عبر POST (شيفرة المصدر في جذر المشروع)
+- `routes/web.php` — حذف `GET /logout` نهائيًا (أصبح 404) واستبداله بـ`POST /logout` (Remedy P2 في A1 §3.3) — يمنع Logout-CSRF عبر رابط مُضمَّن.
+- `app/Controllers/AuthController.php` — `logout()`: `Auth::logout()` + `session_destroy()` + إتلاف كوكي الجلسة (EVALSESSID) عبر `setcookie(session_name(), '', time()-42000, ...)` ثم توجيه `/login`.
+- `app/Views/layouts/header.php` — ربط الخروج من `<a href>` إلى نموذج POST مع `csrf_field()` (يُغطَّى بـ`Auth::enforceCsrfToken`).
+- `tests/cases/Core/AuthTest.php` — `testLogoutRouteIsPostOnly` (تحقق Reflection من خريطة `$router`: لا `GET['logout']`، و`POST['logout']` صحيح).
+- `appendices/routes_inventory.txt` — سطر logout حُدِّث إلى POST + تعليق البند.
+- إثبات: `php -l` + `AuthTest` 28/28 + Live HTTP (GET /logout→404 والجلسة سليمة؛ POST بلا توكن→رفض CSRF والجلسة سليمة؛ POST بتوكن→302 `/login` مع `Set-Cookie: EVALSESSID=deleted; Max-Age=0` والجلسة ملغاة؛ نموذج header يحوي action/token) PASS. التفاصيل في `CD-004_IMPLEMENTATION.md`.
+
 ## 2026-09-15 — CD-004 بند 1: فحص users.status بعد password_verify (شيفرة المصدر في جذر المشروع)
 - `app/Controllers/AuthController.php` — بعد نجاح كلمة المرور: `active` يكمل الدخول؛ `suspended`/`invited` يُرفضان مع `Audit::log` (`USER_LOGIN_SUSPENDED`/`USER_LOGIN_INVITED`) وإشعار `Auth::notifyAdmins` وفلاش وتوجيه `/login`. تدفق `invited` الكامل مؤجل إلى بند 10.
 - `tests/cases/Core/AuthTest.php` — 3 اختبارات (رفض suspended/رفض invited/قبول active) عبر عملية فرعية + بذر/تنظيف مستخدمين مؤقتين.

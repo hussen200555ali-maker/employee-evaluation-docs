@@ -2,7 +2,7 @@ $router->get('', 'App\Controllers\PagesController@home');
 $router->get('about', 'App\Controllers\PagesController@about');
 $router->get('login', 'App\Controllers\AuthController@showLoginForm');
 $router->post('login', 'App\Controllers\AuthController@login');
-$router->get('logout', 'App\Controllers\AuthController@logout');
+$router->post('logout', 'App\Controllers\AuthController@logout'); // بند 4: خروج عبر POST فقط
 $router->get('dashboard', 'App\Controllers\DashboardController@index');
 $router->get('branches', 'App\Controllers\BranchController@index');
 $router->post('branches', 'App\Controllers\BranchController@store');
