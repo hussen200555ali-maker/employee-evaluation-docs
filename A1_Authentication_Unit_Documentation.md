@@ -243,7 +243,7 @@
 | 9 | **`csrf_tokens` بلا تنظيف** للتوكنات المنتهية/المستخدمة | Schema:237, Auth.php:142 | نمو الجدول |
 | 10 | **استعادة كلمة المرور غير منفذة** رغم الجدول (لا مسار/عرض فارغ/رابط `#`) + `password_resets` بلا `expires_at`/`used` | routes/web.php (لا يذكرها), forgot-password.php (0 بايت) | انغلاق المستخدم |
 | 11 | **«تذكرني» واجهة ميتة** — checkbox بلا `name` وبدون حساب كوكي/توكن | login.php:42 | خداع مستخدمي UI |
-| 12 | **ترميز صريح لمعرّف دور Admin في إشعارات المشرفين** (عولج بند 14): كان `ur.role_id = 1` مضمّنًا | CsrfGraceLogger.php:119 | انهيار الافتراض عند تغيير الدور — أصبح بحثًا ديناميكيًا `roles.name='Admin' AND is_system_role=1` مع كاش وFallback |
+| 12 | **ترميز صريح لمعرّف دور Admin في إشعارات المشرفين** — مرجع تاريخي؛ الكود الفعلي يستخدم بحثًا ديناميكيًا عبر roles.name = 'Admin' AND is_system_role = 1: كان `ur.role_id = 1` مضمّنًا | CsrfGraceLogger.php:119 | انهيار الافتراض عند تغيير الدور — أصبح بحثًا ديناميكيًا `roles.name='Admin' AND is_system_role=1` مع كاش وFallback |
 | 13 | **لا إعادة مصادقة** للإجراءات الحساسة (تغيير أدوار/صلاحيات/نسخ) | Admin\UserController + roles | طلب مخادع/جلسة متخفية |
 | 14 | **تعليقات محطّمة الترميز** في `public/index.php` و`.htaccess` (أثر مراجعة فقط) | index.php:2–5, .htaccess:2 | لا يؤثر وظيفيًا |
 

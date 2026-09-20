@@ -1,5 +1,13 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-21 — إغلاق CD-004: اعتماد البند 6 + خطة C/B/A + سطور الإغلاق الإلزامية
+- **إغلاق البند 6 (استيضاح المستشار)**: `git log` يُثبت التسلسل 6(`8a72979`)←7(`991e0bb`)←14(`0982b3e`) — البند 6 أُغلق قبل 7 و14؛ لا إعادة عمل. أدلة مُعادة التوكيد (القراءة الآنية): `php -l` نظيف لـ config.php/index.php/verify_phase1.php، غياب `config/app.php`+`performance.php`، حضور `storage/logs/php-error.log`+`storage/.htaccess`، grep بلا مراجع للملفين المحذوفين.
+- **C — تذييل مرجعي تاريخي** بالنص الموحّد (مرجع تاريخي — الكود الفعلي يستخدم بحثًا ديناميكيًا عبر `roles.name='Admin' AND is_system_role=1`) في 4 مواضع: `CD-004_Execution_Plan.md:58`، `CD-004_IMPLEMENTATION.md:74`، `A1:246`، `docs/Phase_0_Documentation.md:46`. قرار المعتمد: لا تُذيَّل المواضع ذاتية التوثيق (CHANGELOG، سجل بند 14).
+- **B — إعادة تحقق بند 14 بعد البند 6**: `AuthTest` **31/31** (DatabaseTest 4/5 وHelpersTest 2/3 خط أساس) + تكرر Live HTTP (بذرة → إشعار أساس → تدوير roles.id حتى 13 → إشعار عبر الدور الجديد Δ+1 → استعادة → تنظيف `USERS=0`) **PASS** — سُجّل في قسم بند 14.
+- **A — سطور الإغلاق الإلزامية** «البند X مكتمل — Commit Y — إثبات في القسم Z» أُضيفت رجعيًا: المرحلة 0 (`1bdca31`)، 1 (`ab51405`)، 2 (`62499d3`)، 3 (`e0118ff`)، 4 (`6ce71d6`)، 5 (`19ce159`)، 6 (`8a72979`)، 7 (`991e0bb`)، 12 (`718c0e3`)، 14 (`0982b3e`).
+- **OUT_OF_SCOPE**: #7 (`App.php:52` `if(DEBUG_MODE)` — غير حاجب، يُدرَج في CD-005) + #9 (نطاق بند 13 = تنظيف `csrf_tokens` فقط؛ إعادة المصادقة G13 مؤجلة لـA1-3 → CD-005).
+- الاستئناف وفق الاعتماد: **المرحلة 3** (11→9→10). إثبات التفاصيل في `CD-004_IMPLEMENTATION.md`.
+
 ## 2026-09-21 — CD-004 بند 14: دور Admin ديناميكي (شيفرة المصدر في جذر المشروع)
 - `app/Core/Auth.php` — `adminRoleIds()`: `roles.name='Admin' AND is_system_role=1` مع كاش ثابت لكل طلب وFallback آمن (لا إشعارات + `error_log('CD004_ITEM14…')` في `storage/logs/php-error.log`)، و`clearAdminRoleIdsCache()`؛ `notifyAdmins()` أعيدت كتابتها بـ`role_id IN (:rid…)` وتعود فورًا عند قائمة فارغة.
 - `app/Core/CsrfGraceLogger.php` — `notifyAdmins` تستخدم `Auth::adminRoleIds()` (Remedy النطاق المعتمد للبند 14) لنفس النمط.

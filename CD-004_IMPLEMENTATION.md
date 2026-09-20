@@ -48,6 +48,8 @@
 - `AuthTest` **20/20 نجاح** (الاختبار الحرج لنظام الدخول غير متأثر). ✔
 - فشلان **سابقان** غير مرتبطين بالترحيل (اختبارات معيوبة قائمة): `DatabaseTest::testRowCount` (دلالة `rowCount()` بعد `SELECT COUNT(*)` تعيد 1 صفًا) و`HelpersTest::testConvertToHijriValidDate` (تحويل تاريخ هجري) — سُجّلا في `CD-004_OUT_OF_SCOPE.md` ولا يُصلحان ضمن البنود 1–15.
 
+- **الإغلاق:** المرحلة 0 مكتملة — Commit `1bdca31` — إثبات في «المرحلة 0 — ترحيل قاعدة البيانات» بهذا الملف.
+
 ---
 
 ## البنود 1–15
@@ -71,7 +73,7 @@
 **الإثبات:**
 - `php -l` للملفين: لا أخطاء. ✔
 - `AuthTest` **27/27 نجاح** (3 اختبارات جديدة عبر عملية فرعية مع بذر مستخدمين مؤقتين وقراءة أثر التنفيذ):
-  - `testLoginRejectsSuspendedAccount` — كلمة مرور صحيحة + `status=suspended` → لا جلسة (`SESSION_USER_ID=none`) + فلاش الرفض + `USER_LOGIN_SUSPENDED` + إشعار لمشرف نشط (role_id=1). ✔
+  - `testLoginRejectsSuspendedAccount` — كلمة مرور صحيحة + `status=suspended` → لا جلسة (`SESSION_USER_ID=none`) + فلاش الرفض + `USER_LOGIN_SUSPENDED` + إشعار لمشرف نشط (role_id=1 — مرجع تاريخي؛ الكود الفعلي يستخدم بحثًا ديناميكيًا عبر roles.name = 'Admin' AND is_system_role = 1). ✔
   - `testLoginRejectsInvitedAccount` — نفسه مع `invited` + `USER_LOGIN_INVITED`. ✔
   - `testLoginContinuesForActiveAccount` — `active` → جلسة مؤمّنة (`SESSION_USER_ID=<id>`) بلا فلاش + `USER_LOGIN_SUCCESS`. ✔
   - تنظيف تلقائي في `tearDown` (بذر معزول بأسماء `cd004.*`)؛ شُغِّل الاختبار **مرتين متتاليتين** → 27/27 وبلا أي صفوف متبقية (تحقق SQL: users=0, login_attempts=0, notifications=0). ✔
@@ -81,6 +83,8 @@
   - active (ضبط موجب): `302 → /dashboard` + `ACTION_USER_LOGIN_SUCCESS=1` + `NOTIF=0`.
   - تنظيف: `USERS=0` → **PASS**. ✔
 - انحدار خفيف: `DatabaseTest` 4/5 و`HelpersTest` 2/3 (نفس الفشلين السابقين الموثقين في OUT_OF_SCOPE) — بلا انحدار جديد. ✔
+
+- **الإغلاق:** البند 1 مكتمل — Commit `ab51405` — إثبات في قسم «بند 1 — فحص users.status بعد password_verify» بهذا الملف.
 
 ### بند 2 — قفل محاولات الدخول
 | الحقل | القيمة |
@@ -104,6 +108,8 @@
 - `AuthTest` **24/24 نجاح** (3 اختبارات جديدة: تسلسل التأخير، العد/القفل/المسح، مسح عند النجاح). ✔
 - **Live HTTP**: 5 طلبات POST بـاعتمادات خاطئة وتوكن صحيح → failCount 1→5، أوقات ~1.1/2.1/4.1/8.1/8.1 ثانية؛ بعد الخامسة: إشعار في `notifications` (title يحوي اسم المستخدم، type=warning للمشرفين)؛ الطلبان #6 و#7 → فشل **مُحصَّل** (failCount يبقى 5 — لا محاولة جديدة على المسار المقفول) → PASS. تنظيف السجلات والإشعارات التجريبية بعد الاختبار. ✔
 
+- **الإغلاق:** البند 2 مكتمل — Commit `62499d3` — إثبات في قسم «بند 2 — قفل محاولات الدخول» بهذا الملف.
+
 ### بند 3 — CSRF صفحة الدخول
 | الحقل | القيمة |
 |---|---|
@@ -125,6 +131,8 @@
 - محاكاة توكن ما قبل المصادقة (سكربت تجريبي): طول 64، إعادة استخدام `reuse_same=yes`، تحقق صحيح `validate_ok=yes`، تحقق خاطئ مرفوض `validate_bad=rejected` → PASS. ✔
 - **Live HTTP** (Apache/MySQL): GET /login → 200 ويحوي `name="_token"` بقيمة 64-سداسي عشرية (csrffield يُرسم قبل المصادقة)؛ إعادة استخدام التوكن عبر إعادة تحميل الصفحة (REUSE_SAME=True)؛ POST /login **بتوكن صحيح** → 302 → `/login` (وصل لفحص الاعتمادات — مرّ من بوابة CSRF)؛ POST **بلا توكن** أو **بتوكن خاطئ** → 302 → `/evaluations/excel/import` (رفض CSRF كما هو محدد بلا HTTP_REFERER). ✔
 - `AuthTest` **21/21 نجاح** (بعد تحديث الاختبارات للسلوك الجديد)؛ المجموعة الكاملة: AuthTest 21/21 — مع فشلين سابقين موثقين (`DatabaseTest` 4/5، `HelpersTest` 2/3). ✔
+
+- **الإغلاق:** البند 3 مكتمل — Commit `e0118ff` — إثبات في قسم «بند 3 — CSRF صفحة الدخول» بهذا الملف.
 
 ### بند 4 — الخروج عبر POST
 | الحقل | القيمة |
@@ -151,6 +159,8 @@
   - تنظيف: USERS=0, NOTIF=0, ATTEMPTS=0, USER_ROLES=0, AUDIT=0 → **PASS**. ✔
 - انحدار خفيف: `DatabaseTest` 4/5 و`HelpersTest` 2/3 (الفشلان السابقان الموثقان في OUT_OF_SCOPE) — بلا انحدار جديد. ✔
 
+- **الإغلاق:** البند 4 مكتمل — Commit `6ce71d6` — إثبات في قسم «بند 4 — الخروج عبر POST» بهذا الملف.
+
 ### بند 5 — تحصين الجلسة
 | الحقل | القيمة |
 |---|---|
@@ -172,6 +182,8 @@
 - `php -l` لكلا الملفين: لا أخطاء. ✔
 - Smoke (التسلسل الفعلي config←session_start←echo): `session_name=EVALSESSID`, `gc_maxlifetime=1800`, `cookie_httponly=1`, `cookie_samesite=Strict`, `use_strict_mode=1`, `use_only_cookies=1`, جلسة تبدأ بـ26 حرفًا بلا تحذيرات. ✔
 - `AuthTest` **20/20 نجاح** (لا انحدار). ✔
+
+- **الإغلاق:** البند 5 مكتمل — Commit `19ce159` — إثبات في قسم «بند 5 — تحصين الجلسة» بهذا الملف.
 
 ### بند 6 — إخفاء الأخطاء ودمج الإعدادات
 | الحقل | القيمة |
@@ -207,6 +219,8 @@
 - `_emergency/verify_phase1.php`: القسم [2/8] الجديد **10/10 ✓** والفحصان القديمان المتبقيان (`division_id`، `analysis.view`) فشلان **سابقان** لمرحلة DB قديمة (متحقق: غائبان قبل البند 6، وترحيل CD-004 سليم: login_attempts/password_history موجودان) — سُجّلا في OUT_OF_SCOPE (البندان 6 و7). ✔
 - نسخ تراجع: `_emergency/rollback/CD-004/2026-09-15/config/config.pre-item6.php`, `app.pre-item6.php`, `performance.pre-item6.php`, `public/index.pre-item6.php`. ✔
 
+- **الإغلاق:** البند 6 مكتمل — Commit `8a72979` — إثبات في قسم «بند 6 — إخفاء الأخطاء ودمج الإعدادات» بهذا الملف.
+
 ### بند 7 — إصلاح حارس Admin/UserController
 | الحقل | القيمة |
 |---|---|
@@ -228,6 +242,8 @@
   - Admin: GET `/admin/users` → **200** مع «إدارة المستخدمين». ✔
   - تنظيف: `USERS=0` بعد الحذف. → **PASS**. ✔
 - نسخة تراجع: `_emergency/rollback/CD-004/2026-09-15/UserController.pre-item7.php`. ✔
+
+- **الإغلاق:** البند 7 مكتمل — Commit `991e0bb` — إثبات في قسم «بند 7 — إصلاح حارس Admin/UserController» بهذا الملف.
 
 ### بند 8 — نسخة صلاحيات المستخدم
 *بانتظار التنفيذ*
@@ -254,6 +270,8 @@
 - `php -l`: لا أخطاء. ✔
 - Live HTTP: صفحة `/login` لا تحتوي `name="remember"`، ورابط `forgot-password` حاضر. ✔
 
+- **الإغلاق:** البند 12 مكتمل — Commit `718c0e3` — إثبات في قسم «بند 12 — إزالة «تذكرني»» بهذا الملف.
+
 ### بند 13 — سكربت تنظيف CSRF
 *بانتظار التنفيذ*
 
@@ -278,6 +296,9 @@
   - تدوير `roles.id` إلى معرّف جديد (10) بلا تغيير في الاسم/النظام، ثم نقل مستخدم الـAdmin إليه، ثم تسجيل دخول الموقوف مجددًا → العد يزيد بواحد (الإشعار يصل عبر الدور **الجديد** ≠ 1). ✔
   - إعادة الاستعادة (تأكيد 1 = Admin system) وإعادة الإسناد للدور الأصلي، والتنظيف النهائي `USERS=0`. ✔ → **PASS**
 - نسخة تراجع: `_emergency/rollback/CD-004/2026-09-15/Auth.pre-item14.php` (رفيق) + `CsrfGraceLogger.pre-item14.php`. ✔
+- **تحقق ما بعد إغلاق البند 6 (2026-09-21)**: أعيد تشغيل المجموعة فوق `config.php` المندمج (البند 6): `AuthTest` **31/31** ✓، `CsrfGraceLogger::notifyAdmins` يعمل ✓، `Auth::notifyAdmins` يعمل ✓، وإعادة Live HTTP كاملة (بذرة → إشعار أساس → تدوير `roles.id` إلى 13 → إشعار عبر الدور الجديد Δ+1 → استعادة → تنظيف `USERS=0`) → **PASS** ✓. بلا انحدار ناتج عن البند 6.
+
+- **الإغلاق:** البند 14 مكتمل — Commit `0982b3e` — إثبات في قسم «بند 14 — دور Admin ديناميكي» بهذا الملف.
 
 ### بند 15 — شاشة الإشعارات
 *بانتظار التنفيذ*
