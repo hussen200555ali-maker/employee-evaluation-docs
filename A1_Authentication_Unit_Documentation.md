@@ -51,7 +51,7 @@
 | `app/Controllers/AuthController.php` | `showLoginForm` / `login` / `logout` / `csrfToken` | قلب الوحدة؛ 80 سطرًا |
 | `app/Core/Auth.php` | 13 دالة ثابتة: `check, id, is, hasRole, isAdmin, user, userHasPermission, can, logout, generateCsrfToken, validateCsrfToken, enforceCsrfToken` | ترخيص + CSRF |
 | `app/Models/User.php` | استعلامات المصادقة والجلب: `findByUsernameOrEmail, findById, getUserRoles, getUserPermissions, updateLastLogin` + دوال إدارة الحسابات | 373 سطرًا |
-| `app/Core/CsrfGraceLogger.php` | فترة سماح CSRF (240 دقيقة) + تسجيل + إشعار المشرفين | `role_id = 1` مضمّن |
+| `app/Core/CsrfGraceLogger.php` | فترة سماح CSRF (240 دقيقة) + تسجيل + إشعار المشرفين | إشعار المشرفين عبر دور Admin ديناميكي (بند 14) |
 | `app/Core/Flash.php` | رسائل جلسة تُعرض مرة واحدة | `flash_messages` |
 | `app/Core/Audit.php` | الكتابة في `audit_logs` (user_id, action, entity, ip) | يبتلع الأخطاء |
 | `app/Core/Database.php` | مساعد PDO: `query/bind/execute/fetch/fetchAll/fetchColumn` + Transactions | `ATTR_ERRMODE=EXCEPTION` |
@@ -243,7 +243,7 @@
 | 9 | **`csrf_tokens` بلا تنظيف** للتوكنات المنتهية/المستخدمة | Schema:237, Auth.php:142 | نمو الجدول |
 | 10 | **استعادة كلمة المرور غير منفذة** رغم الجدول (لا مسار/عرض فارغ/رابط `#`) + `password_resets` بلا `expires_at`/`used` | routes/web.php (لا يذكرها), forgot-password.php (0 بايت) | انغلاق المستخدم |
 | 11 | **«تذكرني» واجهة ميتة** — checkbox بلا `name` وبدون حساب كوكي/توكن | login.php:42 | خداع مستخدمي UI |
-| 12 | **ترميز صريح `role_id = 1`** في إشعارات المشرفين | CsrfGraceLogger.php:119 | انهيار الافتراض عند تغيير الدور |
+| 12 | **ترميز صريح لمعرّف دور Admin في إشعارات المشرفين** (عولج بند 14): كان `ur.role_id = 1` مضمّنًا | CsrfGraceLogger.php:119 | انهيار الافتراض عند تغيير الدور — أصبح بحثًا ديناميكيًا `roles.name='Admin' AND is_system_role=1` مع كاش وFallback |
 | 13 | **لا إعادة مصادقة** للإجراءات الحساسة (تغيير أدوار/صلاحيات/نسخ) | Admin\UserController + roles | طلب مخادع/جلسة متخفية |
 | 14 | **تعليقات محطّمة الترميز** في `public/index.php` و`.htaccess` (أثر مراجعة فقط) | index.php:2–5, .htaccess:2 | لا يؤثر وظيفيًا |
 
@@ -298,7 +298,7 @@
 | **P2** | انعاش الصلاحيات | جلب `user_roles/user_permissions` في كل طلب، أو إبطال الجلسات عند تغيير الدور، أو تخزين توقيع (signature) يقارن به |
 | **P2** | إعادة مصادقة للأعمال الحساسة | طلب كلمة المرور ثانيةً لتغيير الأدوار/الصلاحيات/تنزيل النسخ |
 | **P3** | تنظيف `csrf_tokens` | حذف دوري للتوكنات `used=1` أو منتهية الصلاحية (cron) |
-| **P3** | استبدال `role_id=1` الثابت | قيد JOIN باسم `roles.name='Admin'` |
+| **P3** | ~~استبدال معرّف دور Admin الثابت~~ (نُفّذ بند 14) | بحث ديناميكي `roles.name='Admin' AND is_system_role=1` + كاش + Fallback آمن — طُبّق في `Auth::notifyAdmins` و`CsrfGraceLogger::notifyAdmins` |
 | **P3** | البيئة النهائية | HTTPS إلزامي + نقل `config/` و`backups/` والفروعات خارج جذر الويب (يردد 13_Security.md §3) |
 
 ---

@@ -1,5 +1,14 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-21 — CD-004 بند 14: دور Admin ديناميكي (شيفرة المصدر في جذر المشروع)
+- `app/Core/Auth.php` — `adminRoleIds()`: `roles.name='Admin' AND is_system_role=1` مع كاش ثابت لكل طلب وFallback آمن (لا إشعارات + `error_log('CD004_ITEM14…')` في `storage/logs/php-error.log`)، و`clearAdminRoleIdsCache()`؛ `notifyAdmins()` أعيدت كتابتها بـ`role_id IN (:rid…)` وتعود فورًا عند قائمة فارغة.
+- `app/Core/CsrfGraceLogger.php` — `notifyAdmins` تستخدم `Auth::adminRoleIds()` (Remedy النطاق المعتمد للبند 14) لنفس النمط.
+- `_emergency/create_api_keys_table.sql` + `_emergency/csrf_migration.sql` — `role_id=1` الصريح → `IN (SELECT id FROM roles WHERE name='Admin' AND is_system_role=1)`؛ أدوار HR/Manager/Staff بقيت ثوابت كما كانت.
+- `tests/cases/Core/AuthTest.php` — `seedAdminUser` ديناميكي + أدوات تدوير/تنزيل دور Admin النظامي (`rotateAdminRole`/`restoreAdminRole`/`demoteSystemAdminRole`/`restoreSystemAdminRole`) و`notificationTitleCount`.
+- الإثبات: grep شامل صفر + `php -l` نظيف + `AuthTest` 31/31 (وصول إشعار إدارة عبر معرّف جديد ≠ 1، وFallback بلا دور نظامي) + **Live HTTP** (تسجيل موقوف → إشعار؛ تدوير `roles.id` → إشعار عبر الدور الجديد ثم استعادة؛ تنظيف `USERS=0`) **PASS**.
+- إعادة مرجعية «الاتفاقية»: معرّف الدور الترقيمي غير ثابت — المطابقة بالمعرّف فقط داخل نموذج عرض (radio) بلا كتابته في منطق التشغيل.
+- **توثيق:** `CD-004_IMPLEMENTATION.md` (بند 14) + `CHANGELOG.md` (جذر/تسليم) + `A1_Authentication_Unit_Documentation.md` (3 مواضع). تفاصيل الإثبات الكاملة في `CD-004_IMPLEMENTATION.md`.
+
 ## 2026-09-16 — CD-004 بند 7: إصلاح حارس Admin/UserController (شيفرة المصدر في جذر المشروع)
 - `app/Controllers/Admin/UserController.php` — `exit;` بعد `forbidden()` داخل `__construct`: سابقًا `return forbidden()` بلا `exit` يترك تنفيذ دالة الإدارة يستمر للمستخدم غير Admin (Remedy A1 §2 أ: الحارس القاصر Google-Bot-accessible).
 - `tests/cases/Core/AuthTest.php` — `testAdminUserControllerGuardStopsNonAdmin` (subprocess: غير-Admin يتوقف عند 403 بلا «إدارة المستخدمين»؛ وAdmin يمر — `ADMIN_PASSED`).

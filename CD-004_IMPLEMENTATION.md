@@ -258,7 +258,26 @@
 *بانتظار التنفيذ*
 
 ### بند 14 — دور Admin ديناميكي
-*بانتظار التنفيذ*
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-21 |
+| الحالة | **مكتمل** |
+| الملفات | `app/Core/Auth.php`، `app/Core/CsrfGraceLogger.php`، `_emergency/create_api_keys_table.sql`، `_emergency/csrf_migration.sql`، `tests/cases/Core/AuthTest.php` |
+
+**التنفيذ:** أُزيل كل الاعتماد الصريح على `role_id = 1` (كان متضمّنًا في `Auth::notifyAdmins()` و`CsrfGraceLogger::notifyAdmins()` وسكربتي `_emergency`). أُضيف `Auth::adminRoleIds(): array` المستند لقاعدة «الاتفاقية» (النموذج الفريد `roles.id` قابل للتغيير — لا يجوز تثبيته في الشيفرة): يستعلم `SELECT id FROM roles WHERE name = 'Admin' AND is_system_role = 1` ويخزّن النتيجة في كاش ثابت لكل طلب (`$adminRoleIdsCache`). Fallback آمن: النتيجة فارغة (مثلاً تعديل الدور العام أثناء الصيانة) → لا إشعارات، ويُكتب `error_log('CD004_ITEM14…')` في `storage/logs/php-error.log`. إعادة كتابة `notifyAdmins()`: `UPDATE notifications … WHERE … role_id IN (:rid0…)` مع `ur.user_id` من `user_roles` ومرساة `ur.role_id IN`, وتُعيد فورًا عند `[]`. `clearAdminRoleIdsCache()` عام لتعزيز قابلية الاختبار/الإعداد. السكربتان (`create_api_keys_table.sql`, `csrf_migration.sql`): `role_id = 1` → `role_id IN (SELECT id FROM roles WHERE name='Admin' AND is_system_role=1)` (أدوار HR/Manager/Staff بقيت ثوابت مُستهدفة بنفس الشيفرة الأصلية — لا مشكلة). غطاء الاختبار: `seedAdminUser` صار ديناميكيًا عبر هذه الـsubquery مع أدوات `rotateAdminRole`/`restoreAdminRole` (إعادة تسمية الدور الحالي + إدراج `'Admin'` بمعرّف جديد ≠ 1 ثم الإرجاع) و`demoteSystemAdminRole`/`restoreSystemAdminRole` و`notificationTitleCount`.
+
+**الإثبات:**
+- grep شامل (`app/`، `tests/`، `config/`، `routes/`، `public/`، `_emergency`): **صفر** نتائج لـ `role_id = 1`. ✔ (الإشارات المتبقية في `CD-004_Execution_Plan.md:58` و`سطر 74 هنا` فقط — سجل مرجعي تاريخي يُرك ويُترك كما هو).
+- `php -l` (Auth.php, CsrfGraceLogger.php, AuthTest.php): لا أخطاء. ✔
+- **AuthTest 31/31**، منها اختباران لبند 14:
+  - `testNotifyAdminsReachesDynamicAdminRoleId`: تدوير `roles.id` لـ'Admin' إلى معرّف ≠ 1 ثم إشعار → يصل للدور الجديد (count=1) ← تعمل الـsubquery الديناميكية. ✔
+  - `testNotifyAdminsFallsBackWhenNoSystemAdminRole`: تنزيل مستوى النظام مؤقتًا (لا يوجد دور «Admin» نظامي) → count=0 + وسم `CD004_ITEM14` في `storage/logs/php-error.log`. ✔
+  - فحص ما بعد الاختبارات: `ROLES` أساسية (1 Admin، 2 HR، 3 Manager، 4 Staff، الكل is_system_role=1)، وبلا بقايا (`TMP_ROLES=0`, `ITEM14_USERS=0`). ✔
+- **Live HTTP** (Apache/MySQL؛ ببذر مستخدم موقوف + مستخدم Admin منتسب مبدئيًا للدور 1):
+  - خط الأساس: تسجيل دخول الموقوف → إشعار «محاولة دخول بحساب موقوف — …» يصل (count≥1). ✔
+  - تدوير `roles.id` إلى معرّف جديد (10) بلا تغيير في الاسم/النظام، ثم نقل مستخدم الـAdmin إليه، ثم تسجيل دخول الموقوف مجددًا → العد يزيد بواحد (الإشعار يصل عبر الدور **الجديد** ≠ 1). ✔
+  - إعادة الاستعادة (تأكيد 1 = Admin system) وإعادة الإسناد للدور الأصلي، والتنظيف النهائي `USERS=0`. ✔ → **PASS**
+- نسخة تراجع: `_emergency/rollback/CD-004/2026-09-15/Auth.pre-item14.php` (رفيق) + `CsrfGraceLogger.pre-item14.php`. ✔
 
 ### بند 15 — شاشة الإشعارات
 *بانتظار التنفيذ*
