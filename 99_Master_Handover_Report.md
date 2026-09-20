@@ -202,7 +202,7 @@ users ◄ audit_logs / notifications / csrf_tokens / backup_logs
 | النواة | `App, Router, Controller, Database (PDO Singleton), Model, Auth, CsrfGraceLogger, Audit, Flash, helpers, PdfReportBuilder, Backup*(7)` |
 | النماذج | 28 نموذجًا (`Evaluation` 74KB، `AnalysisModel` 52KB، `Backup` 41KB…) — PDO مُعدّ دائمًا |
 | المتحكمات | 41 (نواة + `Admin/` + `Api/`) |
-| الإعدادات | `config.php` (ذاكرة 2048M، مهلة 600ث، `DEBUG_MODE=true`)، `performance.php` (4096M، 1200ث)، `database.php` (root بلاغ السر)، `app.php` |
+| الإعدادات | `config/config.php` (ذاكرة 2048M، مهلة 600ث، `DEBUG_MODE=false` + تسجيل في `storage/logs/`)، `database.php` (root بلاغ السر) — دُمج `app.php` و`performance.php` فيه (بند 6) |
 | اعتماديات | mpdf 8، phpspreadsheet 1.29، tcpdf 6.10، ar-php 7 (مستعملة)؛ dompdf 3.1 (غير مستعملة)؛ phpunit 11.5 (dev) |
 
 **ملاحظات هندسية:** مكوّن مزدوج للجدولة (`BackupScheduler` + `_fixed`)، أكثر من جيل شاشات تقارير/طباعة، وأصول واجهة محلية كبيرة دون تجميع.
@@ -284,7 +284,7 @@ users ◄ audit_logs / notifications / csrf_tokens / backup_logs
 | **أ. حارس غير مكتمل** | `Admin\UserController.php:26` يرجع `forbidden()` **دون إيقاف التنفيذ** — دوال إدارة المستخدمين قابلة للمتابعة بعد عرض 403 |
 | **ب. نقاط API مكشوفة** | `api/employees/search`, `api/templates/*`, `api/departments/by-branch`, `api/to-hijri`, واجهات `api/report*` بلا مصادقة (سطر الفحص معلّق تعليقًا) |
 | **ج. ملفات في جذر الويب** | `config/*.php`, `backups/*.sql.gz`, تفريغ `employee_evaluation_mvc (1).sql`, `_emergency/`, `_backup/`, `_tmp.php`, سكربتات اختبار |
-| **د. وضع تصحيح مفتوح** | `DEBUG_MODE=true` + `display_errors=1` يطبّع التسلسلات والأخطاء |
+| **د. وضع تصحيح مفتوح** | كان `DEBUG_MODE=true` + `display_errors=1` يطبّع التسلسلات والأخطاء — **عولج بند 6**: `DEBUG_MODE=false` + `display_errors=0` + `log_errors=1` → `storage/logs/php-error.log` |
 | **هـ. لا حماية دخول** | لا قفل محاولات / تنويعة تأخير (throttling) / captcha في `AuthController::login` — تعرّض لـ Brute force |
 
 ### نقاط بيئية

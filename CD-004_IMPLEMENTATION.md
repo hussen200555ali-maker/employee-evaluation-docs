@@ -174,7 +174,38 @@
 - `AuthTest` **20/20 نجاح** (لا انحدار). ✔
 
 ### بند 6 — إخفاء الأخطاء ودمج الإعدادات
-*بانتظار التنفيذ*
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-16 |
+| الحالة | **مكتمل** |
+| الملفات | `config/config.php` (الدمج + إخفاء الأخطاء)، `public/index.php` (إزالة Trace)، `_emergency/verify_phase1.php`، `storage/.htaccess`، حذف `config/app.php` و`config/performance.php` |
+
+**التنفيذ (ر.ق 1 + قرار كبير المستشارين 2026-09-16):**
+- **دمج `app.php` + `performance.php` في `config/config.php`** وفق جدول قيم الدمج المعتمد في خطة التنفيذ:
+  - `memory_limit` **2048M** (رُفضت 4096M) و`max_execution_time` **600** (رُفض 1200) — كما طُلب.
+  - `BACKUP_BATCH_SIZE` **100** (قيمة `performance.php` المعتمدة في الجدول — كانت 1000 في config.php).
+  - `opcache_reset()` **مستبعد عمدًا** من الدمج (يبقى فقط في كود النسخ الاحتياطي `app/Core/BackupOptimizer.php`) — كما طُلب بعدم نقله.
+  - `session.gc_maxlifetime=1800` و`session.cookie_lifetime=0` و`session_name('EVALSESSID')` (بند 5) باقية كما هي.
+  - `DEBUG_MODE`/`APP_URL`/`APP_ROOT`/`CSRF_GRACE_PERIOD_MINUTES` — نسخة واحدة في config.php.
+- **حذف الملفين نهائيًا**: `config/app.php` + `config/performance.php` (متحقق مسبقًا: لا `require` لأي منهما في أي موضع). grep بعد الحذف: **لا مراجع متبقية** في config/public/app/routes/cron/tests.
+- **إخفاء الأخطاء**: `DEBUG_MODE=false`، `error_reporting(E_ALL)`، `display_errors=0`، `log_errors=1`، `ini_set('error_log', APP_ROOT.'/storage/logs/php-error.log')` مع إنشاء دفاعي `@mkdir` للمجلد.
+- **`storage/logs/`**: أُنشئ + `storage/.htaccess` بـ`Require all denied` (يمنع الوصول المباشر عبر الويب لسجلات PHP والنسخ الاحتياطية في storage/ — كان ملف حقيقي يُقدَّم مباشرة).
+- **`public/index.php` (الأصل 44–49)**: حُذف فرع `DEBUG_MODE` وطباعة الـ Trace بالكامل؛ استُبدل بـ`error_log('[FATAL] '…)` كامل (الرسالة+الملف+السطر+الـTrace) + `http_response_code(500)` + صفحة عامة «حدث خطأ غير متوقع» (بدلًا من 404).
+- **`_emergency/verify_phase1.php`**: أُزيل `config/app.php` من قائمة فحص الصياغة؛ استُبدل القسم [2/8] بفحوصات الدمج/الإخفاء (app.php/performance.php محذوفان، لا require لهما، DEBUG_MODE=false، display_errors=0، log_errors=1، error_log→storage/logs، .htaccess موجود)؛ استُبدل `php -l` بـ`PHP_BINARY` ليعمل بلا PHP على PATH.
+
+**الإثبات:**
+- `php -l` لـ config.php وindex.php وverify_phase1.php: لا أخطاء. ✔
+- grep لأي `require` أو مرجع للملفين المحذوفين: **لا شيء** (config، public، app، routes، cron، tests). ✔
+- `AuthTest` **28/28 نجاح** (لا انحدار). ✔
+- **اختبار خطأ متعمد (CLI)**: سكربت يستدعي config.php ويطبّع JSON ثم `trigger_error('CD004_ITEM6_DELIBERATE_ERROR', E_USER_WARNING)`:
+  - إعدادات تحققت كلها صحيحة (debug_false, display_errors_0, log_errors_1, error_log_path, memory_2048, exec_time_600, الملفان محذوفان).
+  - `storage/logs/php-error.log` حوى الواسم؛ وstdout خلا من نص الخطأ (`STDOUT_HIDES_ERROR=YES`) → **PASS**. ✔
+- **Live HTTP** (Apache/MySQL) — التطبيق يعمل بالإعداد المندمج:
+  - GET /login → 200 مع النموذج؛ GET /dashboard (ضيف) → 302 /login. ✔
+  - GET /storage/logs/php-error.log → **403** (محمي). ✔
+  - خطأ متعمد عبر HTTP (مسبار مؤقت `public/_item6_error_probe.php` يُرمي Exception) → **500** بجسم فارغ (`PROBE_HIDES_ERROR=YES` — لا نص خطأ/سلسلة/مسار) + الواسم سُجّل في `storage/logs/php-error.log` بعمود Asia/Riyadh؛ حُذف المسبار بعد الاختبار. → **PASS**. ✔
+- `_emergency/verify_phase1.php`: القسم [2/8] الجديد **10/10 ✓** والفحصان القديمان المتبقيان (`division_id`، `analysis.view`) فشلان **سابقان** لمرحلة DB قديمة (متحقق: غائبان قبل البند 6، وترحيل CD-004 سليم: login_attempts/password_history موجودان) — سُجّلا في OUT_OF_SCOPE (البندان 6 و7). ✔
+- نسخ تراجع: `_emergency/rollback/CD-004/2026-09-15/config/config.pre-item6.php`, `app.pre-item6.php`, `performance.pre-item6.php`, `public/index.pre-item6.php`. ✔
 
 ### بند 7 — إصلاح حارس Admin/UserController
 *بانتظار التنفيذ*

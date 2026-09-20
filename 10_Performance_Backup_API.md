@@ -81,8 +81,8 @@
 
 | البند | القيمة/المرجع |
 |---|---|
-| حد الذاكرة | حتى **4096M** (`config/performance.php`) |
-| مهلة التنفيذ | حتى 1200 ثانية |
+| حد الذاكرة | **2048M** (`config/config.php` — القيمة المعتمدة بند 6، بعد أن كانت 4096M) |
+| مهلة التنفيذ | 600 ثانية |
 | فهارس | `_emergency/perf_indexes.sql` (إضافات أداء) |
 | اختبارات | `docs/Statistics_Performance_Testing_Report.md`، `heavy_queries_test.php`، `query_analyzer.php`، `realtime_monitor.php`، `stress_test_fixed.php`، `simple_memory_test_singleton.php` |
 

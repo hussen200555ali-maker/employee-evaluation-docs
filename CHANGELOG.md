@@ -1,5 +1,14 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-16 — CD-004 بند 6: إخفاء الأخطاء ودمج الإعدادات (شيفرة المصدر في جذر المشروع)
+- `config/config.php` — دمج `app.php` + `performance.php` (ر.ق 1): `memory_limit=2048M`، `max_execution_time=600`، `BACKUP_BATCH_SIZE=100`؛ `DEBUG_MODE=false` + `display_errors=0` + `log_errors=1` + `error_log → storage/logs/php-error.log`؛ `opcache_reset()` مستبعد عمدًا من الدمج.
+- حذف `config/app.php` + `config/performance.php` — لا `require` لهما في أي موضع (متحقق grep قبل/بعد).
+- `public/index.php` — إزالة فرع `DEBUG_MODE` وطباعة الـ Trace (44–49) → `error_log` كامل + `http_response_code(500)` + صفحة عامة.
+- `storage/logs/` + `storage/.htaccess` (`Require all denied` — حماية السجلات والنسخ من الوصول عبر الويب).
+- `_emergency/verify_phase1.php` — فحوصات بند 6 في [2/8] + `PHP_BINARY` ليعمل بلا `php` على PATH.
+- وثائق محدّثة: `07_Technical_Implementation_Details.md`, `10_Performance_Backup_API.md`, `99_Master_Handover_Report.md`, `A1_Authentication_Unit_Documentation.md` (إزالة مراجع app.php/performance.php وضبط DEBUG_MODE).
+- إثبات: `php -l` + grep بلا مراجع + `AuthTest` 28/28 + اختبار خطأ متعمد (CLI/HTTP) سُجّل في `storage/logs/` وأُخفي من الشاشة + Live HTTP (login 200، storage→403، مسبار 500 صامت) + verify_phase1 [2/8] 10/10. التفاصيل في `CD-004_IMPLEMENTATION.md`.
+
 ## 2026-09-16 — CD-004 بند 4: الخروج عبر POST (شيفرة المصدر في جذر المشروع)
 - `routes/web.php` — حذف `GET /logout` نهائيًا (أصبح 404) واستبداله بـ`POST /logout` (Remedy P2 في A1 §3.3) — يمنع Logout-CSRF عبر رابط مُضمَّن.
 - `app/Controllers/AuthController.php` — `logout()`: `Auth::logout()` + `session_destroy()` + إتلاف كوكي الجلسة (EVALSESSID) عبر `setcookie(session_name(), '', time()-42000, ...)` ثم توجيه `/login`.

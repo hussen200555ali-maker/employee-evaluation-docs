@@ -71,10 +71,9 @@
 
 | الملف | أبرز القيم |
 |---|---|
-| `config.php` | `memory_limit 2048M`، `max_execution_time 600`، `DEBUG_MODE=true`، `display_errors=1`، منطقة `Asia/Riyadh (+03:00)`، `CSRF_GRACE_PERIOD_MINUTES=240`، حدود رفع 256M |
-| `app.php` | تعريف `APP_ROOT`، `APP_URL` (اكتشاف تلقائي)، CSRF |
+| `config/config.php` | `memory_limit 2048M`، `max_execution_time 600`، `DEBUG_MODE=false` (بند 6)، `display_errors=0` + `log_errors=1` → `storage/logs/php-error.log`، منطقة `Asia/Riyadh (+03:00)`، `CSRF_GRACE_PERIOD_MINUTES=240`، حدود رفع 256M، `BACKUP_BATCH_SIZE=100` |
 | `database.php` | `localhost / root / (بدون كلمة مرور) / employee_evaluation_mvc / utf8mb4` |
-| `performance.php` | `memory_limit 4096M`، `max_execution_time 1200`، استدعاء `opcache_reset()`، `BACKUP_BATCH_SIZE=100` |
+| *(مُحذوفة)* `config/app.php` و`config/performance.php` | دُمجتا في `config/config.php` (بند 6 — مصدر الحقيقة الواحد)؛ `opcache_reset()` مستبعد من الدمج |
 
 ---
 

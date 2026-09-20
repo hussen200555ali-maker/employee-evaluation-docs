@@ -94,10 +94,9 @@
 
 | الملف | المضمون | الحالة |
 |---|---|---|
-| `config/config.php` | `DEBUG_MODE=true`, `display_errors=1`, `CSRF_GRACE_PERIOD_MINUTES=240`, `APP_TIMEZONE=Asia/Riyadh`, حدود ذاكرة/رفع كبيرة | **محمّل** (index.php:12) |
-| `config/app.php` | تكرار `DEBUG_MODE` و`APP_URL` و`CSRF_GRACE_PERIOD_MINUTES` | مستقل/موازٍ |
-| `config/database.php` | `root` بلا كلمة مرور، `employee_evaluation_mvc`, `utf8mb4` | **محمّل** (index.php:13) |
-| `config/performance.php` | `session.gc_maxlifetime=14400` و`session.cookie_lifetime=0` وغيرها | **غير محمّل في أي مكان** (لا `require`) |
+| `config/config.php` | إعدادات موحّدة (بند 6): `DEBUG_MODE=false`, `display_errors=0` + `log_errors=1` → `storage/logs/php-error.log`, `CSRF_GRACE_PERIOD_MINUTES=240`, `APP_TIMEZONE=Asia/Riyadh`, حدود ذاكرة/رفع كبيرة | **محمّل** (index.php:10) |
+| `config/app.php` + `config/performance.php` | دُمجتا في `config/config.php` (بند 6) وحُذفتا | **محذوفتان** |
+| `config/database.php` | `root` بلا كلمة مرور، `employee_evaluation_mvc`, `utf8mb4` | **محمّل** (index.php:11) |
 
 ---
 
@@ -238,7 +237,7 @@
 | 3 | **POST /login معفى من تحقق CSRF** والنموذج بلا `_token` | Auth.php:213, login.php:25 | Login-CSRF (تزوير دخول ضحية) |
 | 4 | **خروج عبر GET** + لا تدوير لتوكن CSRF + لا مسح كوكي `PHPSESSID` | routes/web.php:24, header.php:452, AuthController.php:67–72 | Logout-CSRF/جلسة معلّقة |
 | 5 | **جلسة غير محصّنة**: `session_start()` بلا `session_name`/`cookie_params`؛ `performance.php` (الذي يضبط `gc_maxlifetime`) **غير محمّل**؛ لا مهلة انتهاء خامل؛ لا `httponly`/`samesite` صريحة | public/index.php:9, config/performance.php:16–17 | سرقة/تسريب جلسة على المدى البعيد |
-| 6 | **كشف معلومات في الإنتاج**: `DEBUG_MODE=true` + `display_errors=1` + طباعة المسار والـ Trace الكامل عند الاستثناء | config/config.php:21–23, public/index.php:44–49 | تسريب داخلي للزوار |
+| 6 | **كشف معلومات في الإنتاج** (عولج بند 6): كان `DEBUG_MODE=true` + `display_errors=1` + طباعة المسار والـ Trace الكامل عند الاستثناء | config/config.php, public/index.php:43–52 | تسريب داخلي للزوار — أصبح يُسجَّل في `storage/logs/php-error.log` بلا عرض |
 | 7 | **حارس مكسور** في `Admin\UserController` (`forbidden()` بلا `exit`) | 13_Security.md §2أ | استمرار تنفيذ دوال الإدارة |
 | 8 | **صلاحيات جلسة مجمّدة**: `user_roles/user_permissions` تُخزَّن وقت الدخول ولا تنعش عند تعديل أدوار المستخدم | AuthController.php:36–37, Auth.php:35–92 | صلاحية قديمة حتى إعادة الدخول |
 | 9 | **`csrf_tokens` بلا تنظيف** للتوكنات المنتهية/المستخدمة | Schema:237, Auth.php:142 | نمو الجدول |
@@ -288,12 +287,12 @@
 
 | الأولوية | التوصية | التفصيل |
 |---|---|---|
-| **P1** | إغلاق وضع التصحيح في أي استضافة إنتاج | `DEBUG_MODE=false` و`display_errors=0` مع تسجيل الأخطاء في ملف |
+| **P1** | إغلاق وضع التصحيح في أي استضافة إنتاج (نُفِّذ بند 6) | `DEBUG_MODE=false` و`display_errors=0` مع تسجيل الأخطاء في ملف (`log_errors=1` → `storage/logs/php-error.log`) |
 | **P1** | فرض التحقق من `users.status='active'` داخل الدخول | في `AuthController::login` أو `findByUsernameOrEmail`؛ رفض `suspended/invited` مع سجل تدقيق |
 | **P1** | إصلاح حارس `Admin\UserController` | إضافة `exit()` أو استثناء بعد `forbidden()` |
 | **P1** | تخفيف فرض كلمة المرور | قفل بعد N محاولة/نافذة/تنويعة تأخير/كابتشا + تسجيل في `audit_logs` |
 | **P1** | حماية Login-CSRF | إنشاء توكن CSRF لصفحات ما قبل الدخول (تخزين مؤقت) أو اعتماد SameSite=Strict |
-| **P2** | تحصين الجلسات | تحميل `config/performance.php` أو ضبط صريح: `gc_maxlifetime`، `cookie_httponly`، `cookie_samesite`، `cookie_secure` (HTTPS)، ومسار/اسم الجلسة + مهلة انتهاء خامل في التطبيق |
+| **P2** | تحصين الجلسات (نُفِّذ بند 5 في `config/config.php` وحُذف `performance.php` بند 6) | ضبط مباشر في `config.php`: `gc_maxlifetime=1800`، `cookie_httponly`، `cookie_samesite=Strict`، `cookie_secure` (HTTPS)، و`session_name('EVALSESSID')` |
 | **P2** | خروج آمن | تحويل `/logout` إلى POST/نموذج + `setcookie(PHPSESSID, '', time()-...)+ تالف التوكن + مسح بيانات الجلسة |
 | **P2** | تنفيذ أو إزالة استعادة كلمة المرور | إما بناء التدفق الكامل (جدول + مسار + بريد/إعادة تعيين) أو إزالة الواجهة الميتة وربط `#` بإحداث جهة الاتصال |
 | **P2** | انعاش الصلاحيات | جلب `user_roles/user_permissions` في كل طلب، أو إبطال الجلسات عند تغيير الدور، أو تخزين توقيع (signature) يقارن به |
