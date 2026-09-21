@@ -88,3 +88,24 @@
 - **اكتشاف (OOS-8):** حذف مستخدم مرتبط بسجلات تقييم (`evaluations.created_by_user_id` FK `eval_fk_creator`) يرمي PDOException غير مُلتقط → HTTP 500؛ سُجِّل خارج النطاق.
 
 - **الإغلاق:** البند 3 مكتمل — Commit `0982ccd` — إثبات في قسم «بند 3 — حماية آخر مدير نظام نشط» بهذا الملف.
+
+### بند 4 — تصحيح صلاحيات Manager (RBAC)
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-21 |
+| الحالة | **مكتمل** |
+| الملفات | `database/migrations/2026_09_21_A2_item4_manager_rbac.sql` + نسخة `CD-001_delivery/database/migrations/` |
+
+**التنفيذ:**
+- إنشاء صلاحيتين مفقودتين: `evaluations.view.team` (id=39) و`evaluations.create.team` (id=40)، الفئة «التقييمات».
+- منح دور Manager (role_id=3) الصلاحيات الثلاث: `evaluations.view.team`, `evaluations.create.team`, `reports.view.team` (id=10) عبر `INSERT IGNORE INTO role_permissions`.
+- تسجيل `PERMISSION_ADDED` في `audit_logs` (entity_type=roles، entity_id=3، details `{migration, granted[]}`، ip=CLI).
+- مشغّل `cd004_trg_role_permissions_ai` رفع `permissions_version` تلقائيًا لمستخدمي Manager (kghamdi: 2→5) → انعاش الجلسة.
+
+**الإثبات:**
+- تطبيق الترحيل: خروج 0. **ملاحظة تشغيلية:** أول تطبيق عبر تمرير PowerShell للـstdin شوّه العربية (`?`) بسبب إعادة ترميز وحدة التحكم؛ أُعيد التطبيق عبر `mysql ... source <file>` (يقرأ الملف UTF-8 مباشرة) فظهرت الفئة «التقييمات» صحيحة.
+- فحص DB: Manager = **3 صلاحيات** (ids 10,39,40)، وبقية الأدوار بلا تغيير (Admin 35، HR 2، Staff 2). ✔
+- فحص تطبيقي عبر `tests/bootstrap.php` و`User::getUserPermissions(2)` → القائمة الثلاث بالضبط (`missing=[]`, `count=3`). ✔
+- سجل تدقيق `PERMISSION_ADDED` (entity_id=3) موجود. ✔
+
+- **الإغلاق:** البند 4 مكتمل — Commit `(يُحدَّث عند الإغلاق)` — إثبات في قسم «بند 4 — تصحيح صلاحيات Manager» بهذا الملف.
