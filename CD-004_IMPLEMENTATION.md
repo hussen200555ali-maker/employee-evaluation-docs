@@ -255,7 +255,42 @@
 *بانتظار التنفيذ*
 
 ### بند 11 — سياسة كلمة المرور
-*بانتظار التنفيذ*
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-21 |
+| الحالة | **مكتمل** |
+| الملفات | `app/Core/Auth.php`، `app/Models/User.php`، `app/Controllers/Admin/UserController.php`، `tests/cases/Core/AuthTest.php` |
+
+**قرار البند المعتمد (2026-09-21 — كبير المستشارين):** الطول الأدنى 8 أحرف + تنوع **3 من 4** أنواع (حرف كبير/حرف صغير/رقم/رمز خاص) + رفض آخر 3 كلمات مرور سابقة عبر `password_history` + قائمة أعلى 100 كلمة شائعة + **بلا انتهاء صلاحية تلقائي** (لا دورة إجبارية للاستبدال) + دالة تحقق موحّدة `Auth::validatePasswordPolicy()` + رسالة خطأ واضحة لكل شرط. خارطة الترقية المستقبلية: قائمة **NIST Breached Passwords** عند توفرها ثم **MFA** — مُسجَّلة في `A1_Authentication_Unit_Documentation.md`.
+
+**التنفيذ:**
+- `app/Core/Auth.php`:
+  - الثوابت `PASSWORD_POLICY_MIN_LENGTH = 8` و`PASSWORD_POLICY_HISTORY = 3` + قائمة `PASSWORD_POLICY_COMMON` (أعلى 100 بصيغة الأمرّي — تشمل `password123!`، `Welcome1!`، `Admin123!`، `Changeme1!`، `Temp123!`، `Password1!` لضمان قياس حتمي في الاختبار).
+  - `passwordPolicyRules(): array` — وصف القواعد الخمس + سطر الترقية (للواجهة/التوثيق).
+  - `validatePasswordPolicy(?string $password, ?int $userId = null): ['ok'=>bool,'errors'=>string[]]` — ترتيب أخطاء ثابت: الطول ← التنوع ← القائمة الشائعة ← نبذ التاريخ (عند تمرير `$userId`).
+  - `passwordReusedRecently(int $userId, string $newPassword): bool` — يسترجع آخر 3 هاشات من `password_history` (ترتيب `created_at DESC, id DESC LIMIT 3`) ويطابق بـ `password_verify`.
+  - `recordPasswordHistory(int $userId, string $oldHash): void` — إدراج هاش كلمة المرور القديمة ثم **prune** إلى آخر 3 فقط عبر جدول مشتق (Derived Table) للتغلب على قيد MySQL 1093 (DELETE + subquery على نفس الجدول).
+  - `generateStrongPassword(int $length = 12): string` — مولّد يضمن الأنواع الأربعة (يستبدل `bin2hex` السابق غير المتوافق مع سياسة التنوع) ويدير حلقة إعادة توليد حتى تحقق `validatePasswordPolicy`.
+- `app/Models/User.php`:
+  - الخاصية العامة `array $lastPasswordErrors` (تعبئتها/تفريغها) لتقرأ الواجهة رسائل الأخطاء الموحّدة.
+  - الحارس الخاص `guardPasswordChange($userId, $newPassword)` — تحقق موحّد (سياسة + نبذ التاريخ عبر `$userId`) + التقاط الهاش الحالي؛ يعيد `null` عند الرفض.
+  - `updatePassword($userId, $newPassword)` — عبر الحارس: عند القبول يحدّث الهاش ثم `recordPasswordHistory(الهاش القديم)`.
+  - `updateUser($data)` — عند مرور `password`: تحقق قبلي بالسياسة قبل أي جملة SQL (رفض آمن بلا تعديل جزئي) + تسجيل الهاش القديم في التاريخ بعد النجاح.
+- `app/Controllers/Admin/UserController.php`:
+  - `store()` و`update()`: **preflight** بـ `Auth::validatePasswordPolicy` قبل الحفظ مع `Flash::set` برسالة لكل شرط مخالِف (رسائل موحّدة من Auth).
+  - `resetPassword()`: يستخدم `Auth::generateStrongPassword(12)` (كان `bin2hex` بلا تنوع)؛ عند فشل الحارس يعاود رسائل `lastPasswordErrors` في استجابة JSON.
+
+**الإثبات:**
+- `php -l` لـ (Auth.php, User.php, UserController.php, AuthTest.php): لا أخطاء. ✔
+- **AuthTest 40/40** (منها **9 اختبارات جديدة** لبند 11):
+  - `testPasswordPolicyRulesReflectApprovedPolicy` — القيم/القواعد الخمس مطابقة للقرار المعتمد (8، 3، بلا انتهاء صلاحية). ✔
+  - `testValidatePasswordPolicyAcceptsCompliantPassword` — كلمة مطابقة تُقبل. ✔
+  - `testValidatePasswordPolicyRejectsEmptyPassword` / `RejectsShortPassword` (رسالة «8 أحرف على الأقل») / `RejectsVarietyUnderThreeOfFour` (`abcdefgh123456` و`ABCDEFGH!!!!` = فئتان فقط → مرفوضة) / `RejectsCommonBlacklistPassword` (`Password123!` يُرفض لسبب السوداء وحده: `assertCount(1)`. ✔
+  - `testValidatePasswordPolicyRejectsReuseOfLastThreeAndAllowsPrunedFourth` — مسار كامل: 3 تغييرات → `historyCount=3`؛ رفض الكلمة الأخيرة/السابقة/الأقدم ضمن آخر 3؛ التغيير الرابع يُزيح الأقدم (يبقى 3) فيصبح مسموحًا؛ عودة رجعية للكلمة التي ما زالت ضمن آخر 3 تُرفض. يفحص فعلًا **نبذ 3 + prune**. ✔
+  - `testUserModelUpdateUserEnforcesPolicy` — `updateUser` يرفض المخالفة بلا حفظ (`lastPasswordErrors` ممتلئة) ويقبل المطابقة مع تسجيل هاش القديم (`historyCount=1`). ✔
+  - `testGenerateStrongPasswordMeetsPolicy` — 20 مولّدًا: `strlen ≥ 12` وكلها تمر `validatePasswordPolicy`. ✔
+- **المجموعة الكاملة** صنّفت بلا انحدار: `AuthTest 40/40`؛ `DatabaseTest 4/5` و`HelpersTest 2/3` خط أساس معروف سابقًا (لا علاقة له بالبند 11). ✔
+- نسخ تراجع: `_emergency/rollback/CD-004/2026-09-15/Auth.pre-item11.php` + `User.pre-item11.php` + `UserController.pre-item11.php`. ✔
 
 ### بند 12 — إزالة «تذكرني»
 | الحقل | القيمة |
