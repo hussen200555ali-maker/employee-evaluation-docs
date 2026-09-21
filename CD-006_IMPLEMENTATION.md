@@ -109,3 +109,24 @@
 - سجل تدقيق `PERMISSION_ADDED` (entity_id=3) موجود. ✔
 
 - **الإغلاق:** البند 4 مكتمل — Commit `fb96fa8` — إثبات في قسم «بند 4 — تصحيح صلاحيات Manager» بهذا الملف.
+
+### بند 5 — تصحيح صلاحيات Staff (إزالة `branches.manage`)
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-21 |
+| الحالة | **مكتمل** |
+| الملفات | `database/migrations/2026_09_21_A2_item5_staff_branches.sql` + نسخة `CD-001_delivery/database/migrations/` |
+
+**التنفيذ:**
+- إزالة `branches.manage` (id=14) من دور Staff (role_id=4) — كان خطرًا أمنيًا (منح إدارة الفروع).
+- منح `branches.view` (id=13) بدلاً منها (عرض فقط).
+- تسجيل `PERMISSION_REMOVED` في `audit_logs` (entity_type=roles، entity_id=4، details `{removed, added}`).
+- مشغّل `cd004_trg_role_permissions_ad/ai` رفع `permissions_version` لمستخدم Staff (smutairi: 2→4).
+
+**الإثبات:**
+- تطبيق عبر `mysql ... source` (UTF-8): خروج 0.
+- فحص DB: Staff = {`branches.view`, `departments.view`} بلا `branches.manage`؛ بقية الأدوار بلا تغيير (Admin 35، HR 2، Manager 3). ✔
+- فحص تطبيقي: `User::getUserPermissions(3)` = `branches.view,departments.view`؛ `has_branches_manage=0`، `has_branches_view=1`. ✔
+- سجل تدقيق `PERMISSION_REMOVED` (entity_id=4) موجود. ✔
+
+- **الإغلاق:** البند 5 مكتمل — Commit `(يُحدَّث عند الإغلاق)` — إثبات في قسم «بند 5 — تصحيح صلاحيات Staff» بهذا الملف.

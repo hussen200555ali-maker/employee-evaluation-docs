@@ -1,5 +1,9 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-21 — CD-006 المرحلة 1 / بند 5: تصحيح صلاحيات Staff (إزالة branches.manage)
+- ترحيل `database/migrations/2026_09_21_A2_item5_staff_branches.sql` (+ نسخة التسليم): إزالة `branches.manage` (id14) من Staff (role_id=4) ومنحه `branches.view` (id13)، مع `PERMISSION_REMOVED` في audit_logs ورفع permissions_version (smutairi 2→4).
+- إثبات: Staff={branches.view,departments.view} بلا branches.manage، وفحص تطبيقي `User::getUserPermissions(3)` يؤكد ذلك؛ بقية الأدوار دون تغيير.
+
 ## 2026-09-21 — CD-006 المرحلة 1 / بند 4: تصحيح صلاحيات Manager (RBAC)
 - ترحيل `database/migrations/2026_09_21_A2_item4_manager_rbac.sql` (+ نسخة التسليم): إنشاء `evaluations.view.team` (id39) و`evaluations.create.team` (id40)، ومنح Manager (role_id=3) الصلاحيات الثلاث `evaluations.view.team`/`evaluations.create.team`/`reports.view.team` (id10)، مع `PERMISSION_ADDED` في audit_logs ورفع permissions_version تلقائيًا (kghamdi 2→5).
 - إثبات: Manager=3 صلاحيات، وبقية الأدوار دون تغيير، وفحص تطبيقي `User::getUserPermissions(2)` = الثلاث بالضبط. ملاحظة: تمرير stdin عبر PowerShell شوّه العربية → أُعيد التطبيق عبر `mysql source` (UTF-8).
