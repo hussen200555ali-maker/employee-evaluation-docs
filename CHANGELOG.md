@@ -1,5 +1,9 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-21 — CD-006 المرحلة 1 / بند 2: إصلاح شاشة إنشاء المستخدم
+- `app/Views/admin/users/create.php` أُعيدت كتابتها من الصفر (كانت 372 سطرًا من markup باني القوالب بترميز مشوّه — اكتشاف CD-005 G1). النموذج الآن: username/email/password/password_confirm/role_id (إلزامي)/employee_id (اختياري) + `csrf_field()` + `POST /admin/users`.
+- إثبات Live HTTP بحساب Admin مؤقت: GET الشاشة 200 بكل الحقول والقوائم (أدوار/موظفين) وغياب آثار الباني؛ POST أنشأ مستخدمًا فعليًا (role_id=4) مع `USER_CREATE`. حُذف الحسابان المؤقتان → users=4. النسخة القديمة في `_emergency/rollback/CD-006/2026-09-21/views/`.
+
 ## 2026-09-21 — CD-006 المرحلة 1 / بند 1: تنظيف بيانات الاختبار (بقايا CD-004)
 - نسخة DB كاملة قبل الحذف: `storage/backups/CD-006/2026-09-21/employee_evaluation_mvc.pre-item1.sql` (1,244,716 بايت، MariaDB dump).
 - ترحيل موثق `database/migrations/2026_09_21_A2_item1_cleanup_test_data.sql` (+ نسخة التسليم): حذف **58 حساب اختبار** (`%@test.local`/`test\_%`/`cd004.%`) + **صف عضوية يتيم واحد** في `user_roles`، مع إدراج `USER_CLEANUP_TEST_DATA` في `audit_logs` (id 682/683). ملاحظة: مشغّل `permissions_version` يمنع قراءة `users` داخل حذف `user_roles` (MySQL error 1442) → جدول مؤقت.
