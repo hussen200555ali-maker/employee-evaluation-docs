@@ -1,5 +1,9 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-21 — CD-006 المرحلة 1 / بند 3: حماية آخر مدير نظام نشط
+- `User`: `activeAdminCount()`/`isActiveAdmin()`/`isLastActiveAdmin()` بتعريف ديناميكي لدور Admin (`Auth::adminRoleIds`). `UserController`: منع حذف/تعليق/خفض آخر مدير نشط في `destroy`/`toggleStatus`/`updateRole` + `LAST_ADMIN_PROTECTED` + إشعار للمشرفين، ودالة `warnIfSingleActiveAdmin()` تُنبّه عند الهبوط إلى مدير واحد.
+- إثبات Live HTTP بجلسة Admin قديمة والمدير النشط الوحيد `sysadmin`: المسارات الثلاثة مُنعت (حذف/خفض 200 مع منع، تعليق 403)، `sysadmin` بقي active/Admin، وإشعارات warning (منع + هبوط إلى 1). تنظيف كامل → users=4. اكتشاف OOS-8 (FK `eval_fk_creator` يسبب 500 عند الحذف).
+
 ## 2026-09-21 — CD-006 المرحلة 1 / بند 2: إصلاح شاشة إنشاء المستخدم
 - `app/Views/admin/users/create.php` أُعيدت كتابتها من الصفر (كانت 372 سطرًا من markup باني القوالب بترميز مشوّه — اكتشاف CD-005 G1). النموذج الآن: username/email/password/password_confirm/role_id (إلزامي)/employee_id (اختياري) + `csrf_field()` + `POST /admin/users`.
 - إثبات Live HTTP بحساب Admin مؤقت: GET الشاشة 200 بكل الحقول والقوائم (أدوار/موظفين) وغياب آثار الباني؛ POST أنشأ مستخدمًا فعليًا (role_id=4) مع `USER_CREATE`. حُذف الحسابان المؤقتان → users=4. النسخة القديمة في `_emergency/rollback/CD-006/2026-09-21/views/`.

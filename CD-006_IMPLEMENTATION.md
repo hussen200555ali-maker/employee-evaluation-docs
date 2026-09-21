@@ -59,3 +59,32 @@
 - تنظيف: حذف الحسابين المؤقتين (549, 550) → `users=4`، `user_roles=4`. ✔
 
 - **الإغلاق:** البند 2 مكتمل — Commit `89470e3` — إثبات في قسم «بند 2 — إصلاح شاشة إنشاء المستخدم» بهذا الملف.
+
+### بند 3 — حماية آخر مدير نظام نشط
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-21 |
+| الحالة | **مكتمل** |
+| الملفات | `app/Models/User.php`، `app/Controllers/Admin/UserController.php` |
+
+**التنفيذ:**
+- `User`: أُضيفت `activeAdminCount()`، `isActiveAdmin($id)`، `isLastActiveAdmin($id)` — تُعرَّف «الإدارية» ديناميكيًا عبر `Auth::adminRoleIds()` (`name='Admin' AND is_system_role=1`) بلا معرّف صريح (اتساقًا مع بند 14 من CD-004).
+- `UserController`: منع في ثلاثة مسارات قبل التنفيذ:
+  - `destroy()` — حذف آخر مدير نشط.
+  - `toggleStatus()` — تعليقه (استجابة JSON 403).
+  - `updateRole()` — خفضه إلى دور غير إداري (`!in_array($roleId, Auth::adminRoleIds())`).
+  - كل محاولة: `Audit::log('LAST_ADMIN_PROTECTED', $id, 'users', ['reason' => delete|suspend|demote, 'actor_id' => ...])` + `Auth::notifyAdmins(...)` + رفض.
+- `warnIfSingleActiveAdmin()` (دالة خاصة): بعد أي عملية ناجحة تُنقص عدد المدراء، إن أصبح `activeAdminCount()===1` → `Auth::notifyAdmins('تنبيه: مدير نظام واحد فقط', ...)`.
+
+**الإثبات:**
+- `php -l` للملفين: لا أخطاء. ✔
+- **Live HTTP** (Apache/MySQL): حساب Admin مؤقت `cd006.item3.actor` (uid 551) بجلسة سليمة، ثم أُزيلت عضويته الإدارية من DB (محاكاة جلسة قديمة) وبقي `sysadmin` (id=1) المدير النشط الوحيد (`active_admins=1`)؛ محاولات الجلسة القديمة على `sysadmin`:
+  - `POST /admin/users/delete {id:1}` → 200 (redirect) لكن **مُنعت**، `LAST_ADMIN_PROTECTED` reason=delete. ✔
+  - `POST /admin/users/update-role {user_id:1, role_id:4}` → 200 لكن **مُنعت**، reason=demote. ✔
+  - `POST /admin/users/toggle-status {user_id:1}` → **403** + JSON، reason=suspend. ✔
+  - `sysadmin` بقي `active`/`Admin`. ✔
+- **تنبيه الهبوط إلى 1:** عند هبوط العدد إلى 1 أُدرجت إشعارات `warning` بعنوان «تنبيه: مدير نظام واحد فقط» (id 608/609)، وإشعارات المنع الثلاثة (id 610/611/612). ✔
+- تنظيف كامل: حذف الحسابين المؤقتين والإشعارات التجريبية → `users=4`، `user_roles=4`، `sysadmin active/Admin`. ✔
+- **اكتشاف (OOS-8):** حذف مستخدم مرتبط بسجلات تقييم (`evaluations.created_by_user_id` FK `eval_fk_creator`) يرمي PDOException غير مُلتقط → HTTP 500؛ سُجِّل خارج النطاق.
+
+- **الإغلاق:** البند 3 مكتمل — Commit `(يُحدَّث عند الإغلاق)` — إثبات في قسم «بند 3 — حماية آخر مدير نظام نشط» بهذا الملف.
