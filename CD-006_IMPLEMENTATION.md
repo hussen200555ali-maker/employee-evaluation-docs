@@ -129,4 +129,4 @@
 - فحص تطبيقي: `User::getUserPermissions(3)` = `branches.view,departments.view`؛ `has_branches_manage=0`، `has_branches_view=1`. ✔
 - سجل تدقيق `PERMISSION_REMOVED` (entity_id=4) موجود. ✔
 
-- **الإغلاق:** البند 5 مكتمل — Commit `(يُحدَّث عند الإغلاق)` — إثبات في قسم «بند 5 — تصحيح صلاحيات Staff» بهذا الملف.
+- **الإغلاق:** البند 5 مكتمل — Commit `01f59fc` — إثبات في قسم «بند 5 — تصحيح صلاحيات Staff» بهذا الملف.
