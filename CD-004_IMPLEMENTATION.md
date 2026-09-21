@@ -479,3 +479,37 @@
 **التوثيق:** `A1_Authentication_Unit_Documentation.md` سؤال §10 رقم 8 «إشعارات = مخزن؟» → **أُجيب (بند 15): واجهة مقروءة** + سياسة الاحتفاظ. `CHANGELOG` (إدخال بند 15). لا صف P جديد في A1.
 
 **الإغلاق:** البند 15 مكتمل — Commit `57e3de0` — إثبات في قسم «بند 15 — شاشة الإشعارات» بهذا الملف.
+
+---
+
+## المرحلة 5 — اختبار القبول والانحدار (قرار A1)
+
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-21 |
+| الحالة | **مكتمل — PASS** (13/13 سيناريو + انحدار) |
+| الملفات | `CD-001_delivery/phase5/{Phase5_Acceptance_Report,Phase5_Scenarios,Phase5_Regression_Checklist,Phase5_Test_Users,ROLLBACK_PATHS}.md` |
+| الإذن | إذن كبير المستشارين 2026-09-21: تجهيز + تنفيذ 13 سيناريو + انحدار + تقرير. **بلا تعديل على الكود** (إلا لخطأ حرج — لم يحدث). |
+
+**التجهيز:** نسخة DB كاملة `storage/backups/CD-004/phase5/employee_evaluation_mvc_phase5.sql` (944,479 بايت، routines/triggers/events) + نسخة الكود `code/` (38.8MB) + `ROLLBACK_PATHS.md`؛ بيانات اختبار نظيفة (3 فروع × 7 أقسام × 10 موظفين `P5-EMP-01..10` + 6 مستخدمين `test_admin/manager/hr/staff/suspended/invited` بكلمات مرور نظامية في `Phase5_Test_Users.md`)؛ `temp/phase5_seed.sql`/`temp/phase5_cleanup.sql` بنمط TEMP لتجنّب ERROR 1442، وLIKE بدل مقارنة collation (ERROR 1267).
+
+**التنفيذ (عميل HTTP حي curl.exe + فحص DB):** السيناريوهات الـ13 مسجّلة بالكامل في `CD-001_delivery/phase5/Phase5_Acceptance_Report.md` (جدول النتائج + أدلة الأرقام) وتفصيليًا في `temp/phase5_logs/driver*.md`. النتائج 13/13:
+- S1 قفل الحساب (5 محاولات ← تأخيرات + `USER_LOGIN_LOCKED`/`_BLOCKED` + إشعار؛ المحاولة السادسة الصحيحة مُمنعة) ✔
+- S2 مهلة الجلسة 1800 + كوكي `HttpOnly/SameSite=Strict/EVALSESSID` + إثبات GC للمهلة (lifetime=1ث → `gc_deleted=1` ثم `fresh-set`) ✔
+- S3 CSRF الدخول (بلا توكن ← رفض؛ مع التوكن ← نجاح) ✔
+- S4 الخروج POST فقط (`GET /logout`=404؛ POST يفكّ الجلسة والكوكي) ✔
+- S5 رفض `suspended/invited` رغم صحة كلمة المرور + تدقيق + إشعار ✔
+- S6 الحارس (زائر 403 على المحمي + `/login` للوحة؛ staff 403؛ admin 200) ✔
+- S7 إعادة التعيين عبر Admin (JSON + `X-CSRF-Token` + جلسة؛ `must_change=1`؛ توجيه قسري `/change-password`) ✔ — عبر `--data-binary @file` (PS5.1 يقطع `{}`) ومع `-b jar` (بلا كوكي → رفض CSRF صحيح).
+- S8 تغيير إجباري/حُرّ (مسح العلم + `USER_PASSWORD_CHANGE`) ✔
+- S9 سياسة بند 11 (رفض قصيرة/بلا تنوع/شائعة + نبذ آخر 3؛ ملاحظة: إعادة نفس الحالية سائغة — تحسين اختياري مستقبلًا) ✔
+- S10 `permissions_version` (2→4 عند تغيير الدور عبر المشغّل؛ نافذة 60 ثانية تحفظ، بعد 70ث تُبطل وتُعاد التوجيه `/login`؛ إعادة دخول بالدور الجديد؛ استعادة v=6) ✔
+- S11 لا `remember` ولا ربط «نسيت» ولا `GET /logout` ✔
+- S12 `cron/cleanup.php` (قديم يُحذف، حديث/مقروء يُبقى؛ 3 سجلات `CRON_CLEANUP_*`؛ خروج 0) ✔
+- S13 دور Admin ديناميكي (تدوير id→36: الإشعار يصل عبر الدور الجديد) + شاشة/جرس + نطاق markRead (إشعار الغير لا يُقرأ) + استعادة ✔
+
+**الانحدار:** `AuthTest` **58/58** + `NotificationTest` **13/13** (بلا انحدار؛ DatabaseTest 4/5 وHelpersTest 2/3 خط أساس معروف OOS)؛ فحص صفحات الوحدات عبر HTTP (Admin: 17 صفحة 200 + 404؛ staff/hr: حراسة 403؛ زائر: العام 200)؛ عينات مواقع `forbidden()` (22) لكل وحدة.
+
+**التنظيف:** `temp/phase5_cleanup.sql` أزال `test_*`/`P5-EMP-*`/بذور P5SEED (users=0, employees=0, csrf/attempts/notifs=0) + سجلات المرحلة أُزيلت؛ DB عادت لحالتها (4 مستخدمون أصليون، 4 أدوار نظامية، `roles.id=1` = Admin، 4 مشغّلات `cd004_trg_*`).
+
+**الإغلاق:** المرحلة 5 مكتملة والوحدة **A1 مكتملة (15/15)** — القرار النهائي في `CD-001_delivery/phase5/Phase5_Acceptance_Report.md` §1/§6. Commit توثيق المرحلة 5 — إثبات في قسم «المرحلة 5» بهذا الملف.
