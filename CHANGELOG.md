@@ -1,5 +1,15 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-21 — CD-004 بند 8: انعاش نسخة صلاحيات المستخدم (permissions_version) (شيفرة المصدر في جذر المشروع)
+- `database/migrations/2026_09_21_A1_permissions_version.sql` (جديد) — **خطوة أولى إلزامية** `UPDATE users SET permissions_version = permissions_version + 1` (أي جلسة نشطة قبل الترحيل تحمل نسخة قديمة) ثم 4 مشغّلات `cd004_trg_*` على `user_roles` و`role_permissions` (AFTER INSERT/DELETE) ترفع نسخة المعنيين عند أي تعديل — قرار المستشار: **Triggers على مستوى البيانات** (الاكتمال > الشفافية). فهرس `user_roles.role_id` متحقق موجود.
+- `app/Core/Auth.php` — `permissionsVersionOf()` (‑1 عند تعذر القراءة = لا تغيير، حفاظًا على التوافر)، `refreshSessionPermissions()` (يعيد بناء أدوار/صلاحيات الجلسة ويثبّت النسخة ووقت الفحص — يُستدعى من `login()`)، `permissionsNeedRefresh()` (نافذة كاش `PERMISSIONS_VERSION_CACHE_SECONDS=60`) و`invalidateSessionIfPermissionsChanged()` (حارس الطلب: `session_unset` + `session_regenerate_id(true)` + رسالة «طرأ تعديل…» + `/login`).
+- `public/index.php` — استدعاء الحارس بعد `enforceCsrfToken()`.
+- `app/Controllers/AuthController.php` — `login()` يستخدم `Auth::refreshSessionPermissions()` (تثبيت النسخة عند الدخول).
+- `tests/cases/Core/AuthTest.php` — 7 اختبارات جديدة (من 51 إلى **58**): مشغلا `user_roles`، مشغّل `role_permissions` مع **3 مستخدمين بدور واحد** + مستخدم تحكمي بدور آخر (لو رُفعت مرة واحدة لكان المشغّل خاطئًا)، تثبيت النسخة عند الدخول، إبطال عند الاختلاف، نافذة الـ60 ثانية، جلسة ما قبل بند 8، وانخفاض **Admin→Staff** الإجباري (إبطال + `IS_ADMIN=0` بعد إعادة الدخول).
+- إثبات: تطبيق الترحيل على DB الحية (4 مشغّلات + `permissions_version=2` لجميع المستخدمين) + `php -l` نظيف + **AuthTest 58/58** + المجموعة الكاملة بلا انحدار (خط الأساس معروف).
+- نسخ تراجع: `_emergency/rollback/CD-004/2026-09-15/Auth.pre-item8.php` + `AuthController.pre-item8.php` + `public/index.pre-item8.php`. تراجع DB: `DROP TRIGGER IF EXISTS cd004_trg_*`.
+- **توثيق:** `CD-004_IMPLEMENTATION.md` (بند 8) + `A1_Authentication_Unit_Documentation.md` (§11 صف P2 «انعاش الصلاحيات» → نُفِّذ). التفاصيل في `CD-004_IMPLEMENTATION.md`.
+
 ## 2026-09-21 — CD-004 بند 10: شاشة تغيير كلمة المرور (شيفرة المصدر في جذر المشروع)
 - `routes/web.php` — `GET/POST /change-password` → `AuthController@showChangePassword/changePassword`.
 - `app/Controllers/AuthController.php` — `requireLogin()`؛ `showChangePassword()` (عرض بشـ«مرجع سياسة بند 11»)؛ `changePassword()`: تأكيد كلمة المرور الحالية (`password_verify`) ← مطابقة التأكيد ← `User::updatePassword` (سياسة بند 11 + نبذ آخر 3 + **مسح `must_change_password`**) ← `Audit::log('USER_PASSWORD_CHANGE')` ← `/dashboard`. كل POST محمي بـ CSRF عبر `enforceCsrfToken`.

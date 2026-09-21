@@ -245,8 +245,44 @@
 
 - **الإغلاق:** البند 7 مكتمل — Commit `991e0bb` — إثبات في قسم «بند 7 — إصلاح حارس Admin/UserController» بهذا الملف.
 
-### بند 8 — نسخة صلاحيات المستخدم
-*بانتظار التنفيذ*
+### بند 8 — انعاش نسخة صلاحيات المستخدم (permissions_version)
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-21 |
+| الحالة | **مكتمل** |
+| الملفات | `database/migrations/2026_09_21_A1_permissions_version.sql` (جديد)، `app/Core/Auth.php`، `public/index.php`، `app/Controllers/AuthController.php`، `tests/cases/Core/AuthTest.php` |
+
+**النطاق (معتمد 2026-09-21):** انعاش الصلاحيات فقط — لا أي «آلية منع/قفل عامة». العمود `users.permissions_version` (مضاف في بند 0) يزداد عند تعديل `user_roles` أو `role_permissions`؛ مقارنة في كل طلب ← إبطال الجلسة عند الاختلاف؛ نافذة كاش 60 ثانية. قرار المستشار: **Triggers على مستوى قاعدة البيانات** (الاكتمال > الشفافية — نسيان مسار = ثغرة أمنية).
+
+**التنفيذ (DB — ترحيل جديد `2026_09_21_A1_permissions_version.sql`):**
+- **خطوة إلزامية أولى:** `UPDATE users SET permissions_version = permissions_version + 1;` — أي جلسة نشطة قبل الترحيل تحمل نسخة قديمة (وجلسات ما قبل البند بلا مفتاح نسخة أصلاً): الزيادة الشاملة تُجبر كل جلسة قائمة على إعادة الدخول عند أول فحص بعد النافذة.
+- فهرس `user_roles.role_id` (مطلوب لربط JOIN داخل مشغّل `role_permissions`): **متحقق موجود** (`KEY role_id`) — لا إنشاء.
+- 4 مشغّلات (أسماء `cd004_trg_*`، بـ`DROP TRIGGER IF EXISTS` + `CREATE` — آمنة إعادة التشغيل):
+  - `user_roles` AFTER **INSERT**/DELETE → `+1` لمستخدم الصف (NEW/OLD.user_id).
+  - `role_permissions` AFTER **INSERT**/DELETE → `+1` لـ**كل** مستخدمي الدور عبر `JOIN user_roles` (تعديل صلاحيات دور بـ`N` مستخدم يرفع النسخة `N` مرة — واحدة لكل مستخدم).
+
+**التنفيذ (كود):**
+- `Auth::permissionsVersionOf($userId)` — قراءة النسخة من DB (تعادل `-1` عند التعذر = «لا تغيير» حفاظًا على التوافر).
+- `Auth::refreshSessionPermissions()` — إعادة بناء `user_roles`/`user_permissions` في الجلسة + تثبيت `permissions_version` و`permissions_check_at`؛ يُستدعى من `login()` (حلّ محل سطري البناء السابقين).
+- `Auth::permissionsNeedRefresh()` — الحاكم: داخل نافذة `PERMISSIONS_VERSION_CACHE_SECONDS=60` يعيد `false` بلا قراءة؛ عند الخروج يقرأ النسخة ويقارن؛ الجلسة القديمة بلا مفتاح نسخة ⇒ `true` (تُبطل — يغطي جلسات ما قبل بند 8).
+- `Auth::invalidateSessionIfPermissionsChanged()` — حارس الطلب: عند الاختلاف `session_unset` + `session_regenerate_id(true)` + `Flash` «طرأ تعديل على صلاحيات حسابك — يرجى تسجيل الدخول مجددًا.» + توجيه `/login`. *(تفصيلة تنفيذية: وُضع `session_regenerate_id(true)` بدل `session_destroy` لتنقل الرسالة إلى صفحة الدخول التالية؛ الأثر الأمني متكافئ — كل بيانات الجلسة تُطهر والمعرّف يُجدَّد.)*
+- `public/index.php` — استدعاء الحارس بعد `enforceCsrfToken()`.
+
+**الإثبات:**
+- تطبيق الترحيل على DB الحية: المشغّلات الأربعة في `information_schema.TRIGGERS` + جميع مستخدمي `users` على `permissions_version=2` (1 قبل + 1 الزيادة الإلزامية؛ 10 مستخدمين). ✔
+- `php -l` (Auth.php, index.php, AuthController.php, AuthTest.php + نسخ التراجع الثلاث): لا أخطاء. ✔
+- **AuthTest 58/58** (7 اختبارات جديدة — من 51):
+  - `testTriggerOnUserRolesAssignAndRemoveBumpsVersion` — إسناد دور يرفع النسخة مرة وإزالته مرة أخرى (AFTER INSERT/DELETE). ✔
+  - `testTriggerOnRolePermissionsBumpsEachUserOfRole` — دور بـ**3 مستخدمين**: تعديل صلاحياته يرفع نسخة **كلٍّ** منهم مرة واحدة (إدراج/حذف)، ومستخدم تحكمي بدور آخر لا يتأثر — لو ارتفعت مرة واحدة لكان المشغّل خاطئًا. ✔
+  - `testLoginStampsPermissionsVersionInSession` — الدخول يثبّت `permissions_version` مطابقًا لـDB و`permissions_check_at`. ✔
+  - `testSessionInvalidatedWhenPermissionsVersionDiffers` — عملية فرعية: نسخة هرمة مع `permissions_check_at=0` ⇒ إبطال (لا sentinel) + `AFTER_USER_ID=none` + رسالة الإعادة + الوجهة `/login` (تحقق ساكن). ✔
+  - `testNoInvalidationInsideCacheWindow` — داخل نافذة الـ60 ثانية لا قراءة ولا إبطال؛ عند فرض الخروج تُكشف الهرمة. ✔
+  - `testLegacySessionWithoutPermissionsVersionInvalidates` — جلسة ما قبل بند 8 (بلا مفتاح نسخة) تُبطل عند أول فحص. ✔
+  - `testAdminDemotedToStaffInvalidatesSessionAndReloginIsNotAdmin` (**إلزامي**) — Admin إلى Staff: جلسة Admin تُبطل فورًا، وإعادة الدخول `IS_ADMIN=0` والأدوار `['Staff']` بلا `Admin` — لو بقي `isAdmin` صحيحًا لكانت ثغرة bypass. ✔
+- **المجموعة الكاملة** بلا انحدار: `AuthTest 58/58`؛ `DatabaseTest 4/5` و`HelpersTest 2/3` خط أساس معروف + سطر `View 'errors/404' does not exist.` (خلل بيئة OOS #4) — كما قبل البند.
+- نسخ تراجع: `_emergency/rollback/CD-004/2026-09-15/Auth.pre-item8.php` + `AuthController.pre-item8.php` + `public/index.pre-item8.php` (لينت سليم). تراجع DB: `DROP TRIGGER IF EXISTS cd004_trg_user_roles_ai/ad` + `DROP TRIGGER IF EXISTS cd004_trg_role_permissions_ai/ad` (الزيادة الشاملة غير معكوسة — أثر ترحيل موثق ومقبول).
+
+- **الإغلاق:** البند 8 مكتمل — Commit <FEAT_SHA> — إثبات في قسم «بند 8 — انعاش نسخة صلاحيات المستخدم» بهذا الملف.
 
 ### بند 9 — إعادة تعيين كلمة المرور عبر Admin + إلزام التغيير (must_change_password)
 | الحقل | القيمة |
