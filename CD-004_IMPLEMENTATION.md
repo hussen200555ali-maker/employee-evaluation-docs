@@ -268,6 +268,17 @@
 - `Auth::invalidateSessionIfPermissionsChanged()` — حارس الطلب: عند الاختلاف `session_unset` + `session_regenerate_id(true)` + `Flash` «طرأ تعديل على صلاحيات حسابك — يرجى تسجيل الدخول مجددًا.» + توجيه `/login`. *(تفصيلة تنفيذية: وُضع `session_regenerate_id(true)` بدل `session_destroy` لتنقل الرسالة إلى صفحة الدخول التالية؛ الأثر الأمني متكافئ — كل بيانات الجلسة تُطهر والمعرّف يُجدَّد.)*
 - `public/index.php` — استدعاء الحارس بعد `enforceCsrfToken()`.
 
+**ADR — إبطال الجلسة عند تغيّر الصلاحيات مع إبلاغ Flash (اعتماد كبير المستشارين 2026-09-21):**
+- **السياق:** حارس البند 8 عند اختلاف النسخة يجب أن يُبطل الجلسة ويُوجّه إلى `/login`. الخطة المعتمدة ذكرت `session_destroy`، لكن التدمير الكامل يحذف ملف الجلسة فيُفقد `Flash` (يُخزَّن في بيانات الجلسة) — صفحة الدخول التالية ستصل بلا رسالة توضّح سبب الإعادة.
+- **البدائل:**
+  1. `session_destroy()` + توجيه مباشر — يُبطل البيانات لكن بلا رسالة مسار للمستخدم.
+  2. `session_destroy()` ثم `session_start()` لتخزين الفلاش — كوكي الجلسة تُتلف فلم يبلغ الفلاش المستعرض (القصد محبط).
+  3. **`session_unset()` أولًا ثم `session_regenerate_id(true)`** (المُعتمد).
+- **القرار:** `session_unset()` ثم `session_regenerate_id(true)` ثم `Flash::set('طرأ تعديل على صلاحيات حسابك — يرجى تسجيل الدخول مجددًا.', 'warning')` ثم توجيه `/login`.
+- **المبرر:** `session_unset()` تمسح **كل** بيانات الجلسة (بينها `user_id`/`user_roles`/`user_permissions`/`permissions_version`) — المستخدم لم يعد مسجّلًا. `session_regenerate_id(true)` تمنح معرّفًا جديدًا وتحذف ملف الجلسة القديم (يمنع fixation) مع استبقاء متغيراتها الحالية — ولأن الفلاش يُسكَّن **بعد** الإبطال، يصل إلى صفحة الدخول التالية.
+- **الأثر الأمني:** متكافئ مع `session_destroy` — لا بقايا بيانات موثقة في الجلسة الجديدة.
+- **تأكيد شرط المستشار:** الترتيب ملتزم — `session_unset()` تُستدعى **قبل** `session_regenerate_id(true)`؛ الكود الفعلي في `app/Core/Auth.php:494-503` (`session_unset()`: سطر 498 ← `session_regenerate_id(true)`: سطر 499).
+
 **الإثبات:**
 - تطبيق الترحيل على DB الحية: المشغّلات الأربعة في `information_schema.TRIGGERS` + جميع مستخدمي `users` على `permissions_version=2` (1 قبل + 1 الزيادة الإلزامية؛ 10 مستخدمين). ✔
 - `php -l` (Auth.php, index.php, AuthController.php, AuthTest.php + نسخ التراجع الثلاث): لا أخطاء. ✔
