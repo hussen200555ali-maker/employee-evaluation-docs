@@ -282,7 +282,7 @@
 - **المجموعة الكاملة** بلا انحدار: `AuthTest 58/58`؛ `DatabaseTest 4/5` و`HelpersTest 2/3` خط أساس معروف + سطر `View 'errors/404' does not exist.` (خلل بيئة OOS #4) — كما قبل البند.
 - نسخ تراجع: `_emergency/rollback/CD-004/2026-09-15/Auth.pre-item8.php` + `AuthController.pre-item8.php` + `public/index.pre-item8.php` (لينت سليم). تراجع DB: `DROP TRIGGER IF EXISTS cd004_trg_user_roles_ai/ad` + `DROP TRIGGER IF EXISTS cd004_trg_role_permissions_ai/ad` (الزيادة الشاملة غير معكوسة — أثر ترحيل موثق ومقبول).
 
-- **الإغلاق:** البند 8 مكتمل — Commit <FEAT_SHA> — إثبات في قسم «بند 8 — انعاش نسخة صلاحيات المستخدم» بهذا الملف.
+- **الإغلاق:** البند 8 مكتمل — Commit `15b14cb` — إثبات في قسم «بند 8 — انعاش نسخة صلاحيات المستخدم» بهذا الملف.
 
 ### بند 9 — إعادة تعيين كلمة المرور عبر Admin + إلزام التغيير (must_change_password)
 | الحقل | القيمة |
