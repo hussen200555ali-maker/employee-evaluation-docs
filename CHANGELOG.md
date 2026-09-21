@@ -1,5 +1,14 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-21 — CD-004 بند 15: شاشة الإشعارات (شيفرة المصدر في جذر المشروع)
+- `GET /notifications` → `NotificationController@index` — قائمة حساب (الأحدث أولًا، مقروء + غير مقروء بتمييز)، تعرض الإشعارات **القديمة** (قبل بند 14 — بلا `related_url`) والجديدة، بأنماط enum الأربعة بشارة وتسمية عربية (بلا تعديل ENUM — OOS #1)، وحالة فارغة.
+- `POST /notifications/read/:id` (مسار مُسند لصاحب الحساب — لا قراءة لإشعارات الغير) و`POST /notifications/read-all` (لا يمس إشعارات الغير) — POST محمي بـCSRF.
+- جرس هيدر: أيقونة + شارة عدد غير المقروء + منسدلة بأحدث 5 إشعارات + «عرض كل الإشعارات»؛ أنماط CSS.
+- `app/Models/Notification.php` (جديد، نمط `getPdo+FETCH_ASSOC`): `forUser/unreadCount/recentForUser/markRead/markAllRead` — **بلا أي DELETE**.
+- سياسة احتفاظ (تُحترم في cron بند 13): لا يُحذف إلا غير المقروء قبل 90 يومًا (`is_read=0`)، والمقروءة تبقى للتدقيق (متطلب المستشار).
+- إثبات: `tests/cases/Core/NotificationTest.php` — **13/13** (عدّاد، ترتيب/legacy، حد الـ5، نطاق per-user، تخزين `notifyAdmins`، عرض كامل، حالة فارغة، بوابة زائر، إجراءا POST). `php -l` نظيف. **المجموعة الكاملة بلا انحدار** (AuthTest 58/58 + خط أساس معروف). نسخ استرجاع `*.pre-item15`.
+- اعتماد مشروط متمَّم: شرط «تأكيد session_unset قبل session_regenerate_id (بند 8)» مؤكَّد — ADR في IMPLEMENTATION + `app/Core/Auth.php:498-499`.
+
 ## 2026-09-21 — CD-004 بند 8: انعاش نسخة صلاحيات المستخدم (permissions_version) (شيفرة المصدر في جذر المشروع)
 - `database/migrations/2026_09_21_A1_permissions_version.sql` (جديد) — **خطوة أولى إلزامية** `UPDATE users SET permissions_version = permissions_version + 1` (أي جلسة نشطة قبل الترحيل تحمل نسخة قديمة) ثم 4 مشغّلات `cd004_trg_*` على `user_roles` و`role_permissions` (AFTER INSERT/DELETE) ترفع نسخة المعنيين عند أي تعديل — قرار المستشار: **Triggers على مستوى البيانات** (الاكتمال > الشفافية). فهرس `user_roles.role_id` متحقق موجود.
 - `app/Core/Auth.php` — `permissionsVersionOf()` (‑1 عند تعذر القراءة = لا تغيير، حفاظًا على التوافر)، `refreshSessionPermissions()` (يعيد بناء أدوار/صلاحيات الجلسة ويثبّت النسخة ووقت الفحص — يُستدعى من `login()`)، `permissionsNeedRefresh()` (نافذة كاش `PERMISSIONS_VERSION_CACHE_SECONDS=60`) و`invalidateSessionIfPermissionsChanged()` (حارس الطلب: `session_unset` + `session_regenerate_id(true)` + رسالة «طرأ تعديل…» + `/login`).
