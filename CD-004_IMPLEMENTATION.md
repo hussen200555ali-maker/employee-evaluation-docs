@@ -248,8 +248,30 @@
 ### بند 8 — نسخة صلاحيات المستخدم
 *بانتظار التنفيذ*
 
-### بند 9 — إعادة تعيين كلمة المرور عبر Admin
-*بانتظار التنفيذ*
+### بند 9 — إعادة تعيين كلمة المرور عبر Admin + إلزام التغيير (must_change_password)
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-21 |
+| الحالة | **مكتمل** |
+| الملفات | `app/Models/User.php`، `app/Controllers/Admin/UserController.php`، `app/Controllers/AuthController.php`، `app/Core/Auth.php`، `app/Views/auth/login.php`، حذف `app/Views/auth/forgot-password.php`، `tests/cases/Core/AuthTest.php` |
+
+**النطاق:** تفعيل العمود الموجود `users.must_change_password` (كان بلا استخدام في الشيفرة) عبر مسار إعادة التعيين الإداري + إلزام التغيير عند الدخول التالي + **ر.ق 2**: إزالة واجهة استعادة كلمة المرور الميتة (لا كود ميت). شاشة تغيير كلمة المرور الفعلية ضمن **بند 10** التالي مباشرة.
+
+**التنفيذ:**
+- `User::updatePassword($userId, $newPassword, $mustChange = false)` — عند `$mustChange=true` يضبط `must_change_password = 1` (إعادة تعيين Admin)؛ وعند التغيير العادي يمسح العلم إلى `0` (سقوط الشرط بمجرد تغيير كلمة المرور). الحارس وسياسة بند 11 وتسجيل `password_history` يعملان في الحالتين.
+- `Admin\UserController::resetPassword()` — يستدعي `updatePassword(..., true)` ويحدّث رسالة النجاح: «يجب على المستخدم تغييرها عند الدخول التالي» (يبقى `USER_PASSWORD_RESET` في التدقيق).
+- `AuthController::login()` — **بعد** المصادقة الناجحة وقبل `/dashboard`: إذا `must_change_password=1` → `Flash::set('يجب تغيير كلمة المرور قبل المتابعة.', 'warning')` + توجيه `Location: /change-password` (الوجهة تنفَّذ في بند 10).
+- **ر.ق 2:** إزالة رابط «نسيت كلمة المرور؟» (`href="#"`) من `login.php` (مع إزالة صف `form-options` الفارغ) + حذف ملف `forgot-password.php` (0 بايت) + إزالة `'forgot-password'` من `skipRoutes` في `Auth::enforceCsrfToken` (الطرق الميتة لا تُعفى) — الإعادة الحصرية عبر Admin.
+
+**الإثبات:**
+- `php -l` (User.php, UserController.php, AuthController.php, Auth.php, login.php, AuthTest.php): لا أخطاء. ✔
+- **AuthTest 43/43** (منها اختبارات بند 9):
+  - `testUpdatePasswordWithMustChangeFlagSetsFlag` — `updatePassword(..., true)` يضبط العلم + `historyCount=1`؛ التحديث العادي يمسحه إلى 0. ✔
+  - `testLoginForcesMustChangePasswordToChangePassword` — مستخدم بعلم التفعيل: دخول ناجح (SESSION_USER_ID) + رسالة «يجب تغيير كلمة المرور قبل المتابعة» (فرع الإلزام) + `USER_LOGIN_SUCCESS` + تحقق ساكن أن الوجهة `/change-password` (CLI تُرسّل الترويسات قبل shutdown فلا يمكن التقاط `headers_list()` — محطة تحقق موثّقة في الاختبار). ✔
+  - `testForgotPasswordDeadSurfaceRemoved` — لا ملف `forgot-password.php` ولا `forgot` في `login.php` / `routes/web.php` + `skipRoutes = ['register','reset-password']` بلا forgot. ✔
+  - `testEnforceCsrfTokenNoLongerSkipsForgotPassword` — POST لمسار ميت لم يعد معفًى من CSRF (subprocess: لا `SURVIVED`، exit عبر `enforceCsrfToken`). ✔ (استبدلت الاختبار القديم `testEnforceCsrfTokenSkipsForgotPasswordPost` الذي كان يفحص الإعفاء المحذوف).
+- **المجموعة الكاملة** بلا انحدار: `AuthTest 43/43`؛ `DatabaseTest 4/5` و`HelpersTest 2/3` خط أساس معروف. ✔
+- نسخ تراجع: `AuthController.pre-item9.php`، `User.pre-item9.php`، `UserController.pre-item9.php`، `Auth.pre-item9.php`، `login.pre-item9.php`، `forgot-password.pre-item9.php` (فارغ — أصل المحذوف). ✔
 
 ### بند 10 — شاشة تغيير كلمة المرور
 *بانتظار التنفيذ*
