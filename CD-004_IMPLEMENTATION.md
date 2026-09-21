@@ -276,7 +276,33 @@
 - **الإغلاق:** البند 9 مكتمل — Commit `1f20e90` — إثبات في قسم «بند 9 — إعادة تعيين كلمة المرور عبر Admin + إلزام التغيير (must_change_password)» بهذا الملف.
 
 ### بند 10 — شاشة تغيير كلمة المرور
-*بانتظار التنفيذ*
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-21 |
+| الحالة | منفَّذ — بانتظار الـCommit/الإغلاق |
+| الملفات | `routes/web.php`، `app/Controllers/AuthController.php`، `app/Views/auth/change-password.php` (جديد)، `tests/cases/Core/AuthTest.php` |
+
+**النطاق المعتمد:** شاشة/مسار تغيير كلمة المرور للأفراد الموثقين — تُفتح إجباريًا بعد إعادة تعيين Admin (بند 9) أو طوعًا في أي وقت؛ مع مرجع سياسة بند 11. تدفق «تعيين كلمة مرور الدعوة (invited)» خارج النطاق — بند 1 يبقى مغلقًا بمنع دخول `invited` (وثِق في `CD-004_OUT_OF_SCOPE.md`).
+
+**التنفيذ:**
+- `routes/web.php`: `GET change-password → AuthController@showChangePassword` و`POST change-password → AuthController@changePassword` (بجوار `logout`).
+- `app/Controllers/AuthController.php`:
+  - `requireLogin()` — زائر بلا جلسة: `Flash` + توجيه `/login` (يحمي الـGET والـPOST معًا؛ الحماية الفعلية لكل POST عبر `Auth::enforceCsrfToken` في `public/index.php`).
+  - `showChangePassword()` — يعرض `auth/change-password` مع `policy` من `Auth::passwordPolicyRules()` (مرجع مباشر للسياسة المعتمدة).
+  - `changePassword()` — 1) تأكيد **كلمة المرور الحالية** عبر `password_verify` (منع التغيير بحجة جلسة مختطفة). 2) مطابقة الحقلين. 3) `User::updatePassword($userId,$new)` — يطبق سياسة بند 11 + نبذ آخر 3 (التاريخ) **ويمسح `must_change_password` تلقائيًا** (سقوط شرط الإلزام). 4) `Audit::log('USER_PASSWORD_CHANGE', ...)` + Flash نجاح + توجيه `/dashboard`.
+- `app/Views/auth/change-password.php` (جديد): نمط صفحة الدخول (هيدر/فوتر، بطاقة مركزية) + حقل الحالية + الجديدة + التأكيد + قائمة مرجع السياسة الأربع + `csrf_field()`.
+- **Post-الصورة (بند 9+10 كتكامل واحد):** بعد إعادة تعيين Admin، يسجّل المستخدم → `must_change_password=1` → توجيه إجباري `/change-password` → يغيّر وفق السياسة → يمسح العلم → `/dashboard` بتدفق سليم.
+
+**الاختبارات (AuthTest — 51/51):** 8 اختبارات `testChangePassword*`:
+`...RequiresLoginRejectsGuest`، `...PageShownForAuthenticatedUser`، `...PageRedirectsGuestToLogin`، `...RejectsWrongCurrentPassword`، `...RejectsConfirmMismatch`، `...EnforcesPolicyViaScreen`، `...RejectsReuseFromHistory`، `...SuccessClearsMustChangeFlagRedirectsDashboardAndAudits`.
+مساعدان: `changePasswordScript` (POST) و`changePasswordPageScript` (GET) + `passwordHashOf`/`mustChangeFlagOf`.
+
+**خدع بيئية موثقة:** خرج صفحة الرندر (~13KB) فوق حد أنبوب Windows عند القراءة المتزامنة في `runCli` (~4KB) يشلّ العملية (نفس **OOS #8**) — يلزم تمريـ reference `$stdoutFile`. و`LOCATION=sent` دائمًا تحت CLI (ترويسات تُرسل قبل shutdown) — تُثبت الوجهات ساكنًا (نمط بند 9).
+- `php -l` نظيف للـ4 ملفات. المجموعة الكاملة بلا انحدار (AuthTest 51/51؛ DatabaseTest 4/5 + HelpersTest 2/3 خط أساس معروف).
+
+**نسخ الاسترجاع (مجلد `_emergency/rollback/CD-004/2026-09-15/`):** `AuthController.pre-item10.php` + `web.pre-item10.php` (حالة «قبل بند 10» = «بعد بند 9»؛ عند الاسترجاع يُحذف `app/Views/auth/change-password.php`). `php -l` سليم وبلا علامات بند 10.
+
+- **الإغلاق:** (يُضاف بعد Commit البند 10)
 
 ### بند 11 — سياسة كلمة المرور
 | الحقل | القيمة |

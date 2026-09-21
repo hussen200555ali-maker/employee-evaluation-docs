@@ -1,5 +1,14 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-21 — CD-004 بند 10: شاشة تغيير كلمة المرور (شيفرة المصدر في جذر المشروع)
+- `routes/web.php` — `GET/POST /change-password` → `AuthController@showChangePassword/changePassword`.
+- `app/Controllers/AuthController.php` — `requireLogin()`؛ `showChangePassword()` (عرض بشـ«مرجع سياسة بند 11»)؛ `changePassword()`: تأكيد كلمة المرور الحالية (`password_verify`) ← مطابقة التأكيد ← `User::updatePassword` (سياسة بند 11 + نبذ آخر 3 + **مسح `must_change_password`**) ← `Audit::log('USER_PASSWORD_CHANGE')` ← `/dashboard`. كل POST محمي بـ CSRF عبر `enforceCsrfToken`.
+- `app/Views/auth/change-password.php` (جديد) — نمط صفحة الدخول + حقل الحالية/الجديدة/التأكيد + قائمة مرجع السياسة + `csrf_field()`.
+- يكمل بند 9 تلقائيًا (وجهة فرع الإلزام قائمة فعليًا)؛ تدفق تفعيل `invited` خارج النطاق → OOS #10 → CD-005.
+- `tests/cases/Core/AuthTest.php` — 8 اختبارات `testChangePassword*`؛ مساعدا `changePasswordScript`/`changePasswordPageScript`.
+- إثبات: `php -l` نظيف + **AuthTest 51/51** + المجموعة الكاملة بلا انحدار (خط الأساس معروف؛ DatabaseTest 4/5 + HelpersTest 2/3). خدعتان موثقتان: إخراج الصفحة الكبيرة (~13KB) فوق حد أنبوب Windows يشلّ `runCli` → `$stdoutFile` (OOS #8)؛ و`LOCATION=sent` تحت CLI → تثبيت الوجهات ساكنًا.
+- **توثيق:** `CD-004_IMPLEMENTATION.md` (بند 10) + `CD-004_OUT_OF_SCOPE.md` (OOS #10) + `A1_Authentication_Unit_Documentation.md` (§2.3 مسارات، §2.2 المتحكم، §10 سؤالي 2 و7، §11 صف P2). التفاصيل في `CD-004_IMPLEMENTATION.md`.
+
 ## 2026-09-21 — CD-004 بند 9: إعادة تعيين كلمة المرور عبر Admin + إلزام التغيير + ر.ق 2 (شيفرة المصدر في جذر المشروع)
 - `app/Models/User.php` — `updatePassword($userId, $newPassword, $mustChange = false)`: إعادة التعيين الإدارية تفعّل `must_change_password=1`، والتغيير العادي يمسحه إلى 0 (الحارس/السياسة/التاريخ كما في بند 11).
 - `app/Controllers/Admin/UserController.php` — `resetPassword()` يستدعي `updatePassword(..., true)` ورسالة نجاح تُعلم بوجوب التغيير عند الدخول التالي.

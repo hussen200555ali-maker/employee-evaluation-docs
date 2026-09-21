@@ -48,7 +48,7 @@
 
 | الملف | الدور | ملاحظات |
 |---|---|---|
-| `app/Controllers/AuthController.php` | `showLoginForm` / `login` / `logout` / `csrfToken` | قلب الوحدة؛ 80 سطرًا |
+| `app/Controllers/AuthController.php` | `showLoginForm` / `login` / `logout` / `showChangePassword` / `changePassword` / `csrfToken` | قلب الوحدة؛ شاشة تغيير كلمة المرور (بند 10) |
 | `app/Core/Auth.php` | 13 دالة ثابتة: `check, id, is, hasRole, isAdmin, user, userHasPermission, can, logout, generateCsrfToken, validateCsrfToken, enforceCsrfToken` | ترخيص + CSRF |
 | `app/Models/User.php` | استعلامات المصادقة والجلب: `findByUsernameOrEmail, findById, getUserRoles, getUserPermissions, updateLastLogin` + دوال إدارة الحسابات | 373 سطرًا |
 | `app/Core/CsrfGraceLogger.php` | فترة سماح CSRF (240 دقيقة) + تسجيل + إشعار المشرفين | إشعار المشرفين عبر دور Admin ديناميكي (بند 14) |
@@ -75,6 +75,8 @@
 | `GET /login` (سطر 22) | `showLoginForm` | عام |
 | `POST /login` (سطر 23) | `login` | معفى من CSRF (قائمة التخطي) |
 | `GET /logout` (سطر 24) | `logout` | — |
+| `GET /change-password` (بند 10) | `showChangePassword` | `requireLogin()`: زائر ← `/login` |
+| `POST /change-password` (بند 10) | `changePassword` | CSRF + `requireLogin()`؛ تحقق الحالية ← السياسة/التاريخ ← مسح `must_change_password` ← `/dashboard` |
 | `GET /dashboard` (سطر 25) | `DashboardController@index` | مُنشئ يحوّل غير المسجَّل لـ `/login` |
 | `GET /csrf/token` (سطر 309) | `csrfToken` | يتطلب `Auth::check()` |
 
@@ -272,12 +274,12 @@
 ## 10. الأسئلة المفتوحة
 
 1. ~~هل توجد سياسة قوة/دورة لكلمات المرور (minimum length, expiry, history) مطلوب توثيقها؟~~ — **أُجيب (بند 11):** اعتُمدت سياسة موحّدة في `Auth::validatePasswordPolicy()`: الطول الأدنى **8** أحرف + تنوع **3 من 4** (حرف كبير/حرف صغير/رقم/رمز خاص) + رفض آخر **3** كلمات عبر `password_history` + قائمة أعلى 100 كلمة شائعة + **بلا انتهاء صلاحية تلقائي** (لا دورة استبدال إجبارية). تُفرَض عند إنشاء/تعديل/إعادة تعيين المستخدم (Admin) وعبر `User::updatePassword`.
-2. ~~هل يتوافر حساب بريد/ـ SMTP لتفعيل استعادة كلمة المرور، أم نكتفي بإعادة تعيين يدوي من لوحة الإدارة؟~~ — **أُجيب (بند 9 / ر.ق 2):** لا مسار استعادة كلمة مرور (لا بريد ولا رابط) — أُزيلت الواجهة الميتة؛ الإعادة تتم **يدويًا من لوحة الإدارة** (`Admin → إعادة تعيين كلمة المرور`) مع إلزام المستخدم التغيير عند الدخول التالي (`must_change_password`).
+2. ~~هل يتوافر حساب بريد/ـ SMTP لتفعيل استعادة كلمة المرور، أم نكتفي بإعادة تعيين يدوي من لوحة الإدارة؟~~ — **أُجيب (بند 9 / ر.ق 2):** لا مسار استعادة كلمة مرور (لا بريد ولا رابط) — أُزيلت الواجهة الميتة؛ الإعادة تتم **يدويًا من لوحة الإدارة** (`Admin → إعادة تعيين كلمة المرور`) مع إلزام المستخدم التغيير عند الدخول التالي (`must_change_password`). ولاحقًا نُفِّذت شاشة التغيير المطلوبة في **بند 10** (`GET/POST /change-password` + `AuthController::showChangePassword/changePassword` بمرجع سياسة بند 11 ومسح العلم عند النجاح).
 3. هل يبقى دور `Admin` برقم `id=1` ثابتًا، أم نعتمد بحثًا بالاسم في الإشعارات؟
 4. ما الحد الأقصى المنشود لمحاولات الدخول الفاشلة قبل القفل (نافذة زمنية/مدة القفل)؟
 5. ما المدة المطلوبة لمهلة انتهاء الجلسة الخاملة (idle timeout)؟
 6. هل يُفترض إلزام HTTPS على الاستضافة النهائية (يشمل `cookie_secure` و`APP_URL https`).
-7. ماذا تفترض الجهة المختصة لسلوك حسابات الحالة `invited` عند الدخول (تفعيل إلزامي؟)؟
+7. ماذا تفترض الجهة المختصة لسلوك حسابات الحالة `invited` عند الدخول (تفعيل إلزامي؟)؟ — حاليًا مرفوضة بصدق (بند 1)؛ لم يُغيَّر ذلك في بند 10 (شاشة تغيير/تعيين كلمة المرور تخدم الموثقين). تدفق «تفعيل الدعوة» يُسجَّل خارج النطاق نحو **CD-005**.
 8. هل وجود نظام إشعارات (`notifications`) يُستخدم حاليًا في واجهة مقروءة، أم مجرد مخزن؟
 9. هل توجد أي نية مستقبلية لمصادقة مزدوجة (2FA/OTP)؟ (خارج النطاق الحالي A1، يُفتح كمعلومة)
 
@@ -294,7 +296,7 @@
 | **P1** | حماية Login-CSRF | إنشاء توكن CSRF لصفحات ما قبل الدخول (تخزين مؤقت) أو اعتماد SameSite=Strict |
 | **P2** | تحصين الجلسات (نُفِّذ بند 5 في `config/config.php` وحُذف `performance.php` بند 6) | ضبط مباشر في `config.php`: `gc_maxlifetime=1800`، `cookie_httponly`، `cookie_samesite=Strict`، `cookie_secure` (HTTPS)، و`session_name('EVALSESSID')` |
 | **P2** | خروج آمن | تحويل `/logout` إلى POST/نموذج + `setcookie(PHPSESSID, '', time()-...)+ تالف التوكن + مسح بيانات الجلسة |
-| **P2** | ~~تنفيذ أو إزالة استعادة كلمة المرور~~ (نُفِّذ بند 9: **إزالة** الواجهة الميتة — تنفيذ تدفق البريد خارج النطاق) | أُزيل رابط `#` + ملف `forgot-password.php` الفارغ + إعفاء CSRF؛ الإعادة حصرية عبر Admin بإلزام التغيير (`must_change_password` + توجيه `/change-password`) |
+| **P2** | ~~تنفيذ أو إزالة استعادة كلمة المرور~~ (نُفِّذ بند 9: **إزالة** الواجهة الميتة — تنفيذ تدفق البريد خارج النطاق) | أُزيل رابط `#` + ملف `forgot-password.php` الفارغ + إعفاء CSRF؛ الإعادة حصرية عبر Admin بإلزام التغيير (`must_change_password` + توجيه `/change-password`). الشاشة نفسها نُفِّذت في **بند 10** (`GET/POST /change-password`: تحقق الحالية ← سياسة بند 11 + نبذ التاريخ ← مسح العلم ← `/dashboard`) |
 | **P2** | انعاش الصلاحيات | جلب `user_roles/user_permissions` في كل طلب، أو إبطال الجلسات عند تغيير الدور، أو تخزين توقيع (signature) يقارن به |
 | **P2** | سياسة قوة كلمات المرور (نُفِّذ بند 11) | **المعتمدة:** طول ≥8 + تنوع 3/4 + رفض آخر 3 (`password_history`) + قائمة أعلى 100 شائعة + بلا دورة انتهاء. التنفيذ: `Auth::validatePasswordPolicy()` موحّد + `User::guardPasswordChange/updatePassword` + preflight في `UserController::store/update` + مولد `generateStrongPassword` لإعادة التعيين. **خارطة الترقية المستقبلية:** قائمة **NIST Breached Passwords** عند توفرها ثم **MFA/2FA** — خارج نطاق A1 الحالي، تُدرَج في **CD-005** |
 | **P2** | إعادة مصادقة للأعمال الحساسة | طلب كلمة المرور ثانيةً لتغيير الأدوار/الصلاحيات/تنزيل النسخ |
