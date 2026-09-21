@@ -273,6 +273,8 @@
 - **المجموعة الكاملة** بلا انحدار: `AuthTest 43/43`؛ `DatabaseTest 4/5` و`HelpersTest 2/3` خط أساس معروف. ✔
 - نسخ تراجع: `AuthController.pre-item9.php`، `User.pre-item9.php`، `UserController.pre-item9.php`، `Auth.pre-item9.php`، `login.pre-item9.php`، `forgot-password.pre-item9.php` (فارغ — أصل المحذوف). ✔
 
+- **الإغلاق:** البند 9 مكتمل — Commit `1f20e90` — إثبات في قسم «بند 9 — إعادة تعيين كلمة المرور عبر Admin + إلزام التغيير (must_change_password)» بهذا الملف.
+
 ### بند 10 — شاشة تغيير كلمة المرور
 *بانتظار التنفيذ*
 
