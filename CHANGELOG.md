@@ -1,5 +1,13 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-23 — CD-006 المرحلة 1 (البنود 1–6) — إغلاق + تقرير CP1
+- **تسليم:** *Git commit* في مستودع التسليم — إغلاق المرحلة 1 (6/6) بالتقرير الإلزامي:
+  - `CD-006_Phase1_Report.md` + `CD-006_Phase1_Report.pdf` (**نمط A2**: mPDF RTL عربي بخط Cairo عبر سكربت مؤقت خارج كود التطبيق).
+  - تحديث `CD-006_IMPLEMENTATION.md` (جدول الحالة → المرحلة 1 **مكتملة** + سطر إغلاق إلزامي «المرحلة 1 مكتملة — Commit … — إثبات في قسم «إغلاق المرحلة 1»).
+  - Git جذر التطبيق: Baseline نظيف واحد — Commit `6cfa863` — بلا Gitlink، بلا vendor/config، الترحيلات متتبَّعة، العمل نظيف.
+- **الحالة:** المرحلة 1 **مكتملة** — التوقف إلزامي قبل المرحلة 2 (البنود 7–12) بانتظار اعتماد CP1.
+
+
 ## 2026-09-21 — CD-006 المرحلة 1 / بند 6: منع تصعيد الصلاحيات في updatePermission
 - `RoleController::updatePermission`: الإلزام بدور Admin (`Auth::isAdmin`) وتضمين دالة جديدة `Role::findPermissionById` + رفض منح صلاحية لا يملكها المنفّذ + Audit بـ`old/new` و`permission_name` و`actor_id`. ترحيل DB غير مطلوب.
 - إثبات Live HTTP: Admin يضيف/يزيل (200)، تعديل دور Admin (403)، صلاحية غير موجودة (404)، مستخدم بـ roles.manage دون Admin (403). `php -l` نظيف، وبعد التنظيف DB رجع إلى users=4/user_roles=4/roles=4/permissions=38. نسخ رجوع في `_emergency/rollback/CD-006/2026-09-21/{controllers,models}`.
