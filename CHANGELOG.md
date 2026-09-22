@@ -1,5 +1,9 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-21 — CD-006 المرحلة 1 / بند 6: منع تصعيد الصلاحيات في updatePermission
+- `RoleController::updatePermission`: الإلزام بدور Admin (`Auth::isAdmin`) وتضمين دالة جديدة `Role::findPermissionById` + رفض منح صلاحية لا يملكها المنفّذ + Audit بـ`old/new` و`permission_name` و`actor_id`. ترحيل DB غير مطلوب.
+- إثبات Live HTTP: Admin يضيف/يزيل (200)، تعديل دور Admin (403)، صلاحية غير موجودة (404)، مستخدم بـ roles.manage دون Admin (403). `php -l` نظيف، وبعد التنظيف DB رجع إلى users=4/user_roles=4/roles=4/permissions=38. نسخ رجوع في `_emergency/rollback/CD-006/2026-09-21/{controllers,models}`.
+
 ## 2026-09-21 — CD-006 المرحلة 1 / بند 5: تصحيح صلاحيات Staff (إزالة branches.manage)
 - ترحيل `database/migrations/2026_09_21_A2_item5_staff_branches.sql` (+ نسخة التسليم): إزالة `branches.manage` (id14) من Staff (role_id=4) ومنحه `branches.view` (id13)، مع `PERMISSION_REMOVED` في audit_logs ورفع permissions_version (smutairi 2→4).
 - إثبات: Staff={branches.view,departments.view} بلا branches.manage، وفحص تطبيقي `User::getUserPermissions(3)` يؤكد ذلك؛ بقية الأدوار دون تغيير.

@@ -130,3 +130,29 @@
 - سجل تدقيق `PERMISSION_REMOVED` (entity_id=4) موجود. ✔
 
 - **الإغلاق:** البند 5 مكتمل — Commit `01f59fc` — إثبات في قسم «بند 5 — تصحيح صلاحيات Staff» بهذا الملف.
+
+### بند 6 — منع تصعيد الصلاحيات في `RoleController::updatePermission`
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-21 |
+| الحالة | **مكتمل** |
+| الملفات | `app/Controllers/Admin/RoleController.php` ، `app/Models/Role.php` (بدون ترحيل DB) |
+
+**التنفيذ:**
+- `Auth::isAdmin()` إلزامي داخل `updatePermission()`: تعديل الصلاحيات مقصور على دور Admin — يمنع تصعيدًا مستقبليًا عبر أي دور آخر يملك `roles.manage`. الرفض: 403 «تعديل الصلاحيات مقصور على مدير النظام.»
+- التحقق من وجود الصلاحية بـ`Role::findPermissionById()` (دالة جديدة): غير موجودة → 404 «الصلاحية غير موجودة.»
+- عند الإضافة: رفض منح صلاحية لا يملكها المُنفِّذ (`Auth::userHasPermission`) → 403 «لا يمكنك منح صلاحية لا تملكها.» (طبقة دفاع في العمق؛ والوصول إليها غير ممكن حاليًا لأن الوحدة محصورة على Admin الذي يملك كل الصلاحيات).
+- حماية دور Admin الاسمية قائمة (403 «لا يمكن تعديل صلاحيات دور المدير.»).
+- **Audit:** تسجيل `old`/`new` مع `permission_id`, `permission_name`, `actor_id` بدلًا من المعرّف وحده.
+
+**الإثبات (Live HTTP — حسابات مؤقتة `cd006.item6.*` ثم حُذفت):**
+- A: Admin يضيف `users.view` إلى دور مؤقت → **200** `{"success":true}`؛ DB: أُضيفت؛ audit `PERMISSION_ADDED` `{permission_id:1, permission_name:users.view, old:false, new:true, actor_id:553}`.
+- B: Admin يزيلها → **200**؛ DB: حُذفت؛ audit `PERMISSION_REMOVED` `{... old:true, new:false}`.
+- C: Admin يحاول تعديل صلاحيات دور Admin نفسه → **403** «لا يمكن تعديل صلاحيات دور المدير.»
+- D: Admin يُدخل صلاحية غير موجودة (99999) → **404** «الصلاحية غير موجودة.»
+- E: مستخدم (صاحب دور مؤقت يملك `roles.manage`) يحاول الإضافة → **403** «تعديل الصلاحيات مقصور على مدير النظام.» مع عدم تغيير في DB.
+- `php -l` نظيف للملفّين. ✔
+- **التنظيف:** users=4، user_roles=4، roles=4، permissions=38، وتوزيع الصلاحيات كما هو (Admin 35 / HR 2 / Manager 3 / Staff 2). ✔
+- **الرجوع:** `_emergency/rollback/CD-006/2026-09-21/controllers/admin-role-controller.php` + `.../models/role.php`.
+
+- **الإغلاق:** البند 6 مكتمل — Commit `(يُحدَّث عند الإغلاق)` — إثبات في قسم «بند 6 — منع تصعيد الصلاحيات» بهذا الملف.
