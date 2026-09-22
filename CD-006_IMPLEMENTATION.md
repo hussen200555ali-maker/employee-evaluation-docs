@@ -155,4 +155,4 @@
 - **التنظيف:** users=4، user_roles=4، roles=4، permissions=38، وتوزيع الصلاحيات كما هو (Admin 35 / HR 2 / Manager 3 / Staff 2). ✔
 - **الرجوع:** `_emergency/rollback/CD-006/2026-09-21/controllers/admin-role-controller.php` + `.../models/role.php`.
 
-- **الإغلاق:** البند 6 مكتمل — Commit `(يُحدَّث عند الإغلاق)` — إثبات في قسم «بند 6 — منع تصعيد الصلاحيات» بهذا الملف.
+- **الإغلاق:** البند 6 مكتمل — Commit `901c55a` — إثبات في قسم «بند 6 — منع تصعيد الصلاحيات» بهذا الملف.
