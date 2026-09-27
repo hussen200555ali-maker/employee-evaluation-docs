@@ -32,7 +32,7 @@
 | إدارة الأدوار | إنشاء/تعديل وصف/حذف الأدوار غير النظامية | `Admin\RoleController.php` |
 | إدارة الصلاحيات | منح/سحب صلاحية لكل دور (AJAX) — **صفحة واحدة مدمجة داخل `admin/roles`** | `admin/roles/index.php`, `main.js:527–584` |
 | نموذج البيانات | `roles` + `permissions` + `user_roles` + `role_permissions` (many-to-many مزدوج) | `db_live_schema.sql` |
-| الحارس | `Auth::is('Admin')` للمستخدمين، و`Auth::can('roles.manage')` للأدوار | `UserController.php:21–30`, `RoleController.php:10–13` |
+| الحارس | **صلاحيات `users.*`** — `Auth::can('users.view')` في `__construct` + حارس لكل عملية داخل دالتها، و`Auth::can('roles.manage')` للأدوار | `UserController.php:21–27`, `RoleController.php:10–13` |
 | التدقيق | تسجيل كل إجراءات A2 في `audit_logs` | `Audit.php:18–44` |
 
 **الأرقام الحية (فحص قراءة-فقط على `employee_evaluation_mvc` في 2026-09-21):**
@@ -67,7 +67,7 @@
 
 | الملف | الدور | ملاحظات |
 |---|---|---|
-| `app/Controllers/Admin/UserController.php` (352 سطرًا) | `index / create / store / edit / update / destroy / updateRole / toggleStatus / resetPassword` (9 دوال) | الحارس: `Auth::is('Admin')` **باسم الدور لا بصلاحية `users.view`** + `exit` (بند 7 A1) |
+| `app/Controllers/Admin/UserController.php` (427 سطرًا) | `index / create / store / edit / update / destroy / updateRole / toggleStatus / resetPassword` (9 دوال) | الحارس: `Auth::can('users.view')` + حارس لكل عملية — **بصلاحيات `users.*` لا باسم الدور** (بند 7 — CD-006) |
 | `app/Controllers/Admin/RoleController.php` (217 سطرًا) | `index / create / store / update / destroy / updatePermission` (6 دوال) | الحارس: `Auth::can('roles.manage')` |
 
 ### 2.2 النماذج (Models)
@@ -91,15 +91,15 @@
 
 | # | المسار | الدالة | الحماية |
 |---|---|---|---|
-| 1 | `GET /admin/users` | `UserController@index` | `Auth::is('Admin')` |
-| 2 | `GET /admin/users/create` | `UserController@create` | `Auth::is('Admin')` |
-| 3 | `POST /admin/users` | `UserController@store` | `Auth::is('Admin')` |
-| 4 | `GET /admin/users/edit/:id` | `UserController@edit` | `Auth::is('Admin')` |
-| 5 | `POST /admin/users/update` | `UserController@update` | `Auth::is('Admin')` |
-| 6 | `POST /admin/users/delete` | `UserController@destroy` | `Auth::is('Admin')` |
-| 7 | `POST /admin/users/update-role` | `UserController@updateRole` | `Auth::is('Admin')` |
-| 8 | `POST /admin/users/toggle-status` | `UserController@toggleStatus` | `Auth::is('Admin')` |
-| 9 | `POST /admin/users/reset-password` | `UserController@resetPassword` | `Auth::is('Admin')` |
+| 1 | `GET /admin/users` | `UserController@index` | `users.view` (عبر `__construct`) |
+| 2 | `GET /admin/users/create` | `UserController@create` | `users.create` |
+| 3 | `POST /admin/users` | `UserController@store` | `users.create` |
+| 4 | `GET /admin/users/edit/:id` | `UserController@edit` | `users.edit` |
+| 5 | `POST /admin/users/update` | `UserController@update` | `users.edit` |
+| 6 | `POST /admin/users/delete` | `UserController@destroy` | `users.delete` |
+| 7 | `POST /admin/users/update-role` | `UserController@updateRole` | `users.edit` |
+| 8 | `POST /admin/users/toggle-status` | `UserController@toggleStatus` | `users.edit` |
+| 9 | `POST /admin/users/reset-password` | `UserController@resetPassword` | `users.edit` |
 | 10 | `GET /admin/roles` | `RoleController@index` | `Auth::can('roles.manage')` |
 | 11 | `GET /admin/roles/create` | `RoleController@create` | `Auth::can('roles.manage')` |
 | 12 | `POST /admin/roles` | `RoleController@store` | `Auth::can('roles.manage')` |
@@ -149,9 +149,9 @@
 ## 3. دورة العمل الفعلية (Workflow)
 
 ### 3.1 حارس الوحدة (كلا المتحكمين)
-1. `UserController::__construct` (21–30): إن لم يكن `Auth::is('Admin')` → `ErrorController->forbidden()` ثم `exit` (الإصلاحُ بند 7 من A1).
+1. `UserController::__construct` (21–27): `Auth::can('users.view')` — تفشل بـ403 عبر `ErrorController->forbidden()` ثم `exit` (الإصلاحُ **بند 7 من CD-006**؛ كان سابقًا `Auth::is('Admin')`). وكل عملية لها حارس خاص داخل دالتها: `users.create` لـcreate/store، `users.edit` لـedit/update/updateRole/toggleStatus/resetPassword، `users.delete` لـdestroy. `Auth::can()` يتجاوز الفحص لـ Admin عبر `Auth::isAdmin()` (bypass).
 2. `RoleController::__construct` (10–13): `Auth::can('roles.manage')` (تُظهر 403 وتُنهي عند الفشل).
-3. قائمة لوحة المدير في الهيدر لا تظهر إلا لـ Admin (`header.php:401`)، مع أن متحكم الأدوار يقبل أي مالكٍ للصلاحية `roles.manage`.
+3. قائمة إدارة المستخدمين/الأدوار في الهيدر (`header.php`): تظهر لمن يملك `users.view` — **خارج** كتلة «الإعدادات» (التي تشترط `templates.manage`/`settings.manage`/`backup.manage`)، وإلا لم تظهر لمن يملك `users.view` وحدها (الإصلاحُ بند 7 من CD-006). تُستخدم `Auth::userHasPermission()` لا `Auth::can()` لأن الأخيرة فيها `exit`. قائمة الأدوار ما زالت داخل كتلة الإعدادات وتتطلب `roles.manage` عبر المتحكم.
 
 ### 3.2 إنشاء مستخدم — **معطّل عمليًا**
 1. `GET /admin/users/create` → `create()` (99–113) يجلب الأدوار + الموظفين غير المرتبطين ثم يعرض `admin/users/create`.
@@ -254,7 +254,7 @@
 
 | المحور | الآلية | المرجع |
 |---|---|---|
-| حارس المستخدمين | `Auth::is('Admin')` (فحص `$_SESSION['user_roles']`) + `exit` بعد 403 | `Auth.php:35`, `UserController.php:21–30` |
+| حارس المستخدمين | `Auth::can('users.view')` في `__construct` + `Auth::can('users.create/edit/delete')` داخل كل دالة → 403 عند الفشل | `Auth.php:100`, `UserController.php:21–27` |
 | حارس الأدوار | `Auth::can('roles.manage')` → 403 عند الفشل | `Auth.php:100`, `RoleController.php:12` |
 | تجاوز Admin | `userHasPermission` يعيد `true` دائمًا لـ Admin | `Auth.php:84–92` |
 | نموذج الصلاحيات | RBAC مزدوج many-to-many (`user_roles` + `role_permissions`)، **بلا `Permission` model** | `Role.php`, schema 550/641 |
@@ -344,7 +344,7 @@
 8. **سنابشوت التدقيق:** هل تُخزَّن القيم القديمة/الجديدة (old/new) في `details` لكل تغيير؟
 9. **الآلية الحرجة:** كيف نُصلح شاشة `create.php` — إعادة كتابة العرض، أم استعادة النسخة الصحيحة من نسخة احتياطية؟
 10. **تنظيف البيانات:** هل نُزيل بقايا الاختبار (58 حسابًا) ضمن CD-006؟
-11. **الحارس:** هل يتحوّل `Auth::is('Admin')` إلى `Auth::can('users.*')` لتفعيل صلاحيات `users.*`؟
+11. ~~**الحارس:** هل يتحوّل `Auth::is('Admin')` إلى `Auth::can('users.*')` لتفعيل صلاحيات `users.*`؟~~ → **نعم، ونُفِّذ كبند 7 في CD-006 (2026-09-28)** — `Auth::can('users.view')` + حارس لكل عملية، وقائمة المستخدمين في الهيدر مبنية بـ`userHasPermission('users.view')` خارج كتلة الإعدادات. مرجع التنفيذ: `CD-006_IMPLEMENTATION.md` قسم «بند 7» + Commit `f44d525`.
 
 ---
 

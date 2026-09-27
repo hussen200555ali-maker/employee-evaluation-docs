@@ -29,8 +29,8 @@
 
 ## 2. ثغرات/نقاط ضعف مؤكدة 🔴
 
-### أ) تجاوز الحارس في `Admin\UserController::__construct`
-`app/Controllers/Admin/UserController.php:26` — عند عدم صلاحية Admin:
+### أ) ~~تجاوز الحارس في `Admin\UserController::__construct`~~ — **مُغلق**
+`app/Controllers/Admin/UserController.php` — عند عدم صلاحية Admin:
 
 ```php
 if (!Auth::is('Admin')) {
@@ -40,6 +40,7 @@ if (!Auth::is('Admin')) {
 
 - المرجع الذي يُرجع 403 **لا يُستخدم** (قيمة تُهمَل)، والـ **الإنشاء يُكمل**، فتستمر دوال `index/store/update/...` بالتنفيذ.
 - **الأثر:** أي مستخدم مسجّل قد يصل لدوال إدارة المستخدمين والأدوار حتى لو عُرض له نص 403.
+- **الحالة: مُصلَح (CD-004 بند 7 ثم CD-006 بند 7).** أُضيف `exit` بعد `forbidden()`، ثم استُبدل الحارس بالكامل بـ`Auth::can('users.view')` + حارس لكل عملية (`users.create/edit/delete`) — فيتحقق من **الصلاحية** لا من اسم الدور، ويبقى 403 مع توقف فعلي. الخطر المُسجَّل هنا (تجاوز الحارس) لم يعد قائمًا؛ ما تبقّى من ملاحظات هذا القسم (ب/ج/د/هـ) خارج نطاق CD-006.
 
 ### ب) نقط API مكشوفة بلا مصادقة
 `app/Controllers/ApiController.php` (سطر 20: مطالبة الدخول **معلّقة تعليقًا**) + `csrf/token` + `api/to-hijri` + واجهات `api/report*`:
