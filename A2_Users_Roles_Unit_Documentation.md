@@ -67,8 +67,8 @@
 
 | الملف | الدور | ملاحظات |
 |---|---|---|
-| `app/Controllers/Admin/UserController.php` (427 سطرًا) | `index / create / store / edit / update / destroy / updateRole / toggleStatus / resetPassword` (9 دوال) | الحارس: `Auth::can('users.view')` + حارس لكل عملية — **بصلاحيات `users.*` لا باسم الدور** (بند 7 — CD-006) |
-| `app/Controllers/Admin/RoleController.php` (217 سطرًا) | `index / create / store / update / destroy / updatePermission` (6 دوال) | الحارس: `Auth::can('roles.manage')` |
+| `app/Controllers/Admin/UserController.php` (387 سطرًا؛ 375 قبل البند 7) | `index / create / store / edit / update / destroy / updateRole / toggleStatus / resetPassword` (9 دوال) | الحارس: `Auth::can('users.view')` + حارس لكل عملية — **بصلاحيات `users.*` لا باسم الدور** (بند 7 — CD-006) |
+| `app/Controllers/Admin/RoleController.php` (210 أسطر) | `index / create / store / update / destroy / updatePermission` (6 دوال) | الحارس: `Auth::can('roles.manage')` |
 
 ### 2.2 النماذج (Models)
 
@@ -149,9 +149,9 @@
 ## 3. دورة العمل الفعلية (Workflow)
 
 ### 3.1 حارس الوحدة (كلا المتحكمين)
-1. `UserController::__construct` (21–27): `Auth::can('users.view')` — تفشل بـ403 عبر `ErrorController->forbidden()` ثم `exit` (الإصلاحُ **بند 7 من CD-006**؛ كان سابقًا `Auth::is('Admin')`). وكل عملية لها حارس خاص داخل دالتها: `users.create` لـcreate/store، `users.edit` لـedit/update/updateRole/toggleStatus/resetPassword، `users.delete` لـdestroy. `Auth::can()` يتجاوز الفحص لـ Admin عبر `Auth::isAdmin()` (bypass).
-2. `RoleController::__construct` (10–13): `Auth::can('roles.manage')` (تُظهر 403 وتُنهي عند الفشل).
-3. قائمة إدارة المستخدمين/الأدوار في الهيدر (`header.php`): تظهر لمن يملك `users.view` — **خارج** كتلة «الإعدادات» (التي تشترط `templates.manage`/`settings.manage`/`backup.manage`)، وإلا لم تظهر لمن يملك `users.view` وحدها (الإصلاحُ بند 7 من CD-006). تُستخدم `Auth::userHasPermission()` لا `Auth::can()` لأن الأخيرة فيها `exit`. قائمة الأدوار ما زالت داخل كتلة الإعدادات وتتطلب `roles.manage` عبر المتحكم.
+1. `UserController::__construct` (L21–30، الحارس في L25): `Auth::can('users.view')` — تفشل بـ403 عبر `ErrorController->forbidden()` ثم `exit` (التحديثُ **بند 7 من CD-006**؛ كان سابقًا `Auth::is('Admin')` بعد إصلاح التجاوز في CD-004). وكل عملية لها حارس خاص داخل دالتها: `users.create` لـcreate/store (L116، L141)، `users.edit` لـupdateRole/toggleStatus/edit/update/resetPassword (L57، L208، L262، L283، L373)، `users.delete` لـdestroy (L325). `Auth::can()` يتجاوز الفحص لـ Admin عبر `Auth::isAdmin()` (bypass).
+2. `RoleController::__construct` (L10–13، الحارس في L12): `Auth::can('roles.manage')` (تُظهر 403 وتُنهي عند الفشل).
+3. قائمة إدارة المستخدمين/الأدوار في الهيدر (`header.php:415–435`): تظهر لمن يملك `users.view` — **خارج** كتلة «الإعدادات» (L373–413، التي تشترط `templates.manage`/`settings.manage`/`backup.manage`)، وإلا لم تكن لتظهر لمن يملك `users.view` وحدها (الإصلاحُ بند 7 من CD-006). تُستخدم `Auth::userHasPermission()` لا `Auth::can()` لأن الأخيرة فيها `exit`. روابط «المستخدمون» (L424) و«الأدوار» (L429) داخل القائمة نفسها، فكلاهما يظهر لمن يملك `users.view`؛ ثم `RoleController` يفرض `roles.manage` على `/admin/roles` (انظر الفجوة #13).
 
 ### 3.2 إنشاء مستخدم — **معطّل عمليًا**
 1. `GET /admin/users/create` → `create()` (99–113) يجلب الأدوار + الموظفين غير المرتبطين ثم يعرض `admin/users/create`.
@@ -232,7 +232,7 @@
 
 | # | القاعدة | الموضع |
 |---|---|---|
-| 1 | الوصول لإدارة المستخدمين مقيّد بالدور `Admin` **بالاسم** (لا بصلاحية `users.view`) | `UserController.php:24` |
+| 1 | الوصول لإدارة المستخدمين مقيّد بصلاحية `users.view` (لا باسم الدور `Admin`)، وكل عملية تُقيَّد بـ`users.create` / `users.edit` / `users.delete` | `UserController.php:21–25`, `UserController.php:57,116,141,208,262,283,325,373` |
 | 2 | الوصول لإدارة الأدوار مقيّد بالصلاحية `roles.manage` | `RoleController.php:12` |
 | 3 | `username` و`email` فريدان على مستوى الجدول | `users` schema |
 | 4 | `employee_id` فريد وربط اختياري؛ FK `CASCADE` | `users` schema |
@@ -271,7 +271,7 @@
 
 | # | نقطة القوة | الدليل |
 |---|---|---|
-| 1 | **حارس مُصلَح ومُنهٍ للتنفيذ** في كلا المتحكمين (`exit` بعد 403) | `UserController.php:24–28` |
+| 1 | **حارس permissions على مستويين**: `Auth::can('users.view')` في `__construct` + `Auth::can(...)` لكل عملية، وكلاهما يُنهي التنفيذ عند 403 | `UserController.php:21–25`, `UserController.php:57,116,141,208,262,283,325,373` |
 | 2 | **تفويض دقيق للأدوار** بصلاحية `roles.manage` بدل اسم الدور | `RoleController.php:12` |
 | 3 | **فصل المستخدم عن الموظف** (حساب وصول مستقل عن هوية الموظف) | schema 657 |
 | 4 | **RBAC مزدوج نظيف** عبر جدولَي ربط بـ PK مركّب وFK `CASCADE` | schema 550/641 |
@@ -291,7 +291,7 @@
 | # | الضعف | الموضع | الأثر |
 |---|---|---|---|
 | 1 | **شاشة إنشاء المستخدم تالفة** — عرض `create.php` يحوي باني القوالب بدل نموذج المستخدم، بترميز مشوّه؛ المتحكم يتوقع حقولًا غير موجودة | `Views/admin/users/create.php` vs `UserController.php:99–137` | **تعذّر إنشاء أي مستخدم من الواجهة** |
-| 2 | **صلاحيات `users.*` الأربع غير مستخدمة إطلاقًا** — الحارس اسم الدور لا الصلاحية | `permissions` 1–4 مقابل `UserController.php:24` | فجوة معمارية RBAC؛ لا تفويض جزئي لإدارة المستخدمين |
+| 2 | ~~**صلاحيات `users.*` الأربع غير مستخدمة إطلاقًا**~~ — **مُغلقة (CD-006 بند 7، 2026-09-28)**: `Auth::can('users.view')` + حارس لكل عملية، وقائمة الهيدر بـ`userHasPermission('users.view')` خارج كتلة الإعدادات | `permissions` 1–4 مقابل `UserController.php:21–25,57,116,141,208,262,283,325,373` | ~~فجوة معمارية RBAC~~ → تفويض جزئي فعّال |
 | 3 | **لا يوجد `Permission` model ولا مسار/شاشة `/admin/permissions`** — الصلاحيات مدمجة داخل `Role`/`admin/roles` | `Role.php`, `routes/web.php:89–95` | فجوة معمارية مقابل التوجيه؛ صعوبة التوسّع |
 | 4 | **لا حارس لآخر Admin** — لا منع حذف/تعليق/خفض آخر Admin (يُمنع فقط إجراء الذات) | `UserController.php` (غياب) | **قفل كامل للنظام** محتمل |
 | 5 | **لا منع تصعيد الصلاحيات (Privilege Escalation)** — أي Admin (أو مالك `roles.manage`) يمنح أي صلاحية لأي دور | `RoleController.php:57–117` | تضخّم امتيازات |
@@ -302,7 +302,7 @@
 | 10 | **لا تحقق من `role_id`/`employee_id` في `store()`** | `UserController.php:122–160` | بيانات ناقصة/معطوبة |
 | 11 | **`deleteUser` مسار مكرر** (`delete` و`deleteUser`) وحذف فعلي بلا تعطيل | `User.php:118,382` | غموض صيانة + فقدان تاريخ |
 | 12 | **لا اختبارات للوحدة A2** | `tests/cases/Core/*` | تراجع غير محمي |
-| 13 | **مسار تحقق/واجهة غير متسقين**: قائمة الهيدر Admin فقط، لكن متحكم الأدوار يقبل `roles.manage` | `header.php:401` vs `RoleController.php:12` | صلاحية «غير قابلة للوصول» من الواجهة |
+| 13 | **قائمة «إدارة الأدوار» في الهيدر ما زالت داخل كتلة الإعدادات** (لا داخل قائمة users.view) بينما متحكم الأدوار يقبل `roles.manage` — فمن يملك `roles.manage` دون `templates.manage`/`settings.manage`/`backup.manage` يرى 403 بلا رابط | `header.php:429` (عبر `users.view` في L417) و`header.php:373` (كتلة الإعدادات) مقابل `RoleController.php:12` | فجوة reachability متبقية — تحتاج نص بند مستقلًا |
 | 14 | **بقايا اختبار غير منزّعة** (58 حسابًا) في جدول `users` الحي | `users` | تلوّث بيانات/إحصاءات مضللة |
 | 15 | **تعليقات/ترميز مشوّه** في `main.js` و`create.php` (أثر مراجعة) | `main.js:621,657`, `create.php` | سوء قراءة/صيانة |
 | 16 | **URLs ثابتة `/employee-evaluation/...`** في JS بلا `APP_URL` | `main.js:541,634,671,719,753` | قيد نقل البيئة |
@@ -374,8 +374,8 @@
 ### أ-1 الملفات التي رُوجعت
 | الملف | الحالة |
 |---|---|
-| `app/Controllers/Admin/UserController.php` | كامل (352 سطرًا) |
-| `app/Controllers/Admin/RoleController.php` | كامل (217 سطرًا) |
+| `app/Controllers/Admin/UserController.php` | كامل (387 سطرًا؛ 375 قبل البند 7) |
+| `app/Controllers/Admin/RoleController.php` | كامل (210 أسطر) |
 | `app/Models/User.php` | كامل (435 سطرًا) |
 | `app/Models/Role.php` | كامل (182 سطرًا) |
 | `app/Core/Auth.php` | كامل (670 سطرًا) |
