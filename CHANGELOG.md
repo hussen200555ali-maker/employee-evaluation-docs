@@ -1,5 +1,12 @@
 ﻿# سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-28 — CD-006 المرحلة 2 / بند 7: تفعيل صلاحيات `users.*` في حارس UserController
+- **قاعدة الإنتاج المثبتة:** `employee_evaluation_mvc` (قرار المستشار — المصدر `config/database.php` الرسمي؛ `employee_evaluation` غير موجودة: خطأ 1046). **توضيح المرجع:** سؤالا قابلية العمود وسلوك FK يخصّان **البند 12-b** لا البند 7؛ و`created_by_user_id NOT NULL` + `eval_fk_creator RESTRICT` يؤكد قرار «الخيار (ج)» — والبند 12-b بعد CP2.
+- **التنفيذ:** `UserController::__construct` من `Auth::is('Admin')` إلى `Auth::can('users.view')` + حارس لكل عملية (9 مواضع: `users.create` لـcreate/store، `users.edit` لـedit/update/updateRole/toggleStatus/resetPassword، `users.delete` لـdestroy). `header.php`: قائمة «إدارة المستخدمين/الأدوار» مستقلة مشروطة بـ`Auth::isAdmin() || Auth::userHasPermission('users.view')`.
+- **قرارات استشارية موثّقة:** `can()` فيه `exit` → يُستخدم في الحُرّاس لا في القوالب (القوائم تستخدم `userHasPermission()` اتساقًا مع L373). **ترحيل `permissions_version` مُتخطّى** لأن `permissionsNeedRefresh()` يفحص DB كل 60 ثانية. بُنيت قائمة users خارج كتلة «الإعدادات» وإلا لم تظهر لمن يملك `users.view` وحدها.
+- **الإثبات (Live HTTP):** Admin 200/200/200 (bypass) · دور `users.view` فقط = 200 على القائمة و403 على كل عمليات التعديل/الحذف (مع DB بلا تغيير) · Staff بلا `users.*` = 403 وبلا رابط · رابط users يظهر مرة واحدة لكل من Admin وviewer · `php -l` نظيف · بيانات الاختبار حُذفت (users 32→30، roles 5→4، permissions=38). نسخة الرجوع `_emergency/rollback/CD-006/2026-09-28/`.
+- **الإغلاق:** البند 7 مكتمل — Commit `feat(A2.7)` + سطر إغلاق إلزامي في `CD-006_IMPLEMENTATION.md`.
+
 ## 2026-09-23 — CD-006 المرحلة 2: طلب تفصيل البنود 7–12 من المستشار (قرار CD-006/CD-007 المثبَّت)
 - قرّر كبير المستشارين اعتماد المرحلة 2 (البنود 7–12 + 12-b)؛ سطر الإطلاق مكتوب في CD-006_IMPLEMENTATION.md («المرحلة 2 مفتوحة — البند 7 بدأ في 2026-09-23»).
 - **لا تنفيذ بعد:** التعريف التفصيلي للبنود 7–12 غير موجود في مستودعَي التطبيق والتسليم (بحث شامل: ملفات، git log، reflog، backups خارج كود التطبيق).

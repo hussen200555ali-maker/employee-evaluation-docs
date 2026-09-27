@@ -157,6 +157,41 @@
 
 - **الإغلاق:** البند 6 مكتمل — Commit `901c55a` — إثبات في قسم «بند 6 — منع تصعيد الصلاحيات» بهذا الملف.
 
+### بند 7 — تفعيل صلاحيات `users.*` في حارس `UserController`
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-28 |
+| الحالة | **مكتمل** |
+| مرجع التفصيل | نص البند 7 الكامل المعتمد (توقيع كبير المستشارين 2026-09-28) — «البند 7 ≠ FK: البند 7 = تفعيل صلاحيات users.*. البند 12-b = FK + حذف مستخدم» |
+| الهدف | تحويل حارس `UserController` من `Auth::is('Admin')` إلى `Auth::can('users.*')` |
+| الملفات | `app/Controllers/Admin/UserController.php` + `app/Views/layouts/header.php` |
+
+**قاعدة الإنتاج المثبتة:** `employee_evaluation_mvc` (قرار المستشار — المصدر `config/database.php` الرسمي؛ `employee_evaluation` غير موجودة — خطأ 1046).
+
+**قرارات المخطّط المعتمدة قبل التنفيذ (استشاري):**
+- `Auth::can()` ينفّذ `forbidden()` + `exit` — غير صالح في بناء القوائم، لذا `header.php` يستخدم `Auth::userHasPermission()` اتساقًا مع النمط الموجود (L373).
+- **ترحيل `permissions_version`: تمّ التخطي** — الشرط المشروط تحقق: `Auth::permissionsNeedRefresh()` يعمل كل 60 ثانية بقراءة `users.permissions_version` من DB فعليًا (`Auth.php` L464–480، `PERMISSIONS_VERSION_CACHE_SECONDS = 60`) فتُبطَل الجلسات تلقائيًا بلا ترحيل.
+
+**التنفيذ:**
+- `__construct`: `if (!Auth::is('Admin')) { forbidden(); exit; }` → `Auth::can('users.view');` (بقيت حماية آخر Admin من البند 3 داخل `destroy`/`toggleStatus`/`updateRole` دون مساس).
+- حارس لكل عملية داخل دالتها: `create`+`store` → `users.create`، `edit`+`update`+`updateRole`+`toggleStatus`+`resetPassword` → `users.edit`، `destroy` → `users.delete` (9 مواضع إجمالًا).
+- `header.php`: رابط «إدارة المستخدمين/الأدوار» نُقل خارج كتلة «الإعدادات» (التي تشترط `templates.manage`/`settings.manage`/`backup.manage`) إلى قائمة مستقلة مشروطة بـ`Auth::isAdmin() || Auth::userHasPermission('users.view')` — وإلا لم يظهر لمن يملك `users.view` وحدها. الاستعلام بالدالة المستقلة `userHasPermission` لا `can()` (لأن `can()` فيه `exit`).
+
+**الإثبات (Live HTTP — Apache + MySQL، قاعدة `employee_evaluation_mvc`):**
+- **سيناريو A — Admin (bypass):** GET `/admin/users` = **200**، `/admin/users/create` = **200**، `/admin/users/edit/3` = **200** — بلا تغيير.
+- **سيناريو B — دور يملك `users.view` فقط:** GET `/admin/users` = **200** (يرى القائمة)، و`/admin/users/create` = **403**، `/admin/users/edit/3` = **403**، POST `delete` = **403**، POST `update-role` = **403**، POST `toggle-status` = **403**، POST `reset-password` = **403**، POST `store` = **403**.
+  - فحص DB بعد المحاولات المرفوضة: `users=30` (بلا زيادة)، `smutairi` `status=active` و`permissions_version=4` (بلا تغيير)، `user_roles(3)={4}` (بلا تغيير)، `hack_users=0`.
+- **سيناريو C — bypass لـ Admin:** `Auth::userHasPermission()` ي short-circuit بـ`isAdmin() → true`،목을 ده证 A (200 على `users.create`/`users.edit` التي لا يملكها أي دور غير Admin).
+- **سيناريو D — دور بلا `users.*` (Staff):** GET `/admin/users` = **403**، ورابط المستخدمين **غير موجود** في صفحته (يُقارن بـ`viewer` الذي ظهر له الرابط مرة واحدة).
+- **header.php:** `viewer` (users.view فقط) = ظهور الرابط **1** مرة، `admin` = **1** مرة (بلا تكرار) — بعد نقل الكتلة.
+- `php -l` نظيف على الملفين المعدَّلين.
+- بيانات الاختبار المؤقتة حُذفت بالكامل: `users` 32 → **30**، الأدوار 5 → **4**، `permissions=38` (بلا تغيير) — بلا أثر متبقٍ.
+
+- **الحدود المُلتزَمة:** لا دور جديد ✔ · لا تعديل مصفوفة الصلاحيات ✔ (`permissions=38` قبل/بعد) · لا مسّ FK ✔ (`eval_fk_creator` RESTRICT كما هو — البند 12-b بعد CP2).
+- **نسخة الرجوع:** `_emergency/rollback/CD-006/2026-09-28/admin-user-controller.pre-item7.php` + `.../layouts-header.pre-item7.php`.
+
+- **الإغلاق:** البند 7 مكتمل — Commit `feat(A2.7)` — إثبات في قسم «بند 7 — تفعيل صلاحيات users.*» بهذا الملف.
+
 ---
 
 ## إغلاق المرحلة 1 (البنود 1–6) — إلزامي (CP1)
