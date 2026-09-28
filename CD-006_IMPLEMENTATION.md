@@ -438,6 +438,56 @@
 
 **الإغلاق:** 11-a و 11-b مُنفَّذان — Commit التسليم `609e8ee` + Commit التطبيق `c2e8225` (`feat(A2.11)`). الترتيب المُلتزَم: 11-a ← 11-b ← Commit ← 12.
 
+#### البند 12 — حذف الدالة الميتة `User::delete()`
+
+**التحقّق قبل الحذف (بالمسح لا بالافتراض):**
+- `User::delete($id)` كانت **نسخة حرفية** من `User::deleteUser($id)` في نفس الملف.
+- **14 استدعاء `->delete()`** في المشروع، كلها على نماذج أخرى: `Branch` · `CourseCatalog` · `Criterion` · `Department` · `Employee` (×2) · `Evaluation` · `Positions` · `Schedule` · `Template` · `TrainingCourse` (×2) · `TrainingWorkshop` · `WorkshopCatalog` — **وصفر منها على `User`**.
+- بحث شامل عن `userModel->delete` / `this->user->delete` / `User::delete` في كل ملفات PHP (خارج النسخ الاحتياطية): **صفر**.
+- `User extends \App\Core\Model`، و`app/Core/Model.php` **لا يعرّف `delete()`** ⇒ لا توارث ولا استيراد من موضع آخر.
+
+**التغيير:** حذف `User::delete($id)` فقط — **‎-11/+0**، بلا أي سطر مضاف. والمُبقى `deleteUser($id)` لأنها الحيّة المستعملة في `UserController::destroy`. ولم يُمسّ أي استدعاء آخر.
+
+**الفحوص:** `php -l` نظيف · `UserTest` 3/3 · `NotificationTest` 13/13 · `AuthTest` 58/59 · `HelpersTest` 2/3 · DB على خط الأساس `users=4 user_roles=4 orphans=0`.
+
+**فشل سابق مُثبت أنه ليس من هذا البند:** `HelpersTest::testConvertToHijriValidDate` (تحويل هجري) فاشل **قبل وبعد** التغيير — مُثبَت بمقارنة `git stash` على `User.php` (النتيجة متطابقة) ⇒ لا علاقة له بالحذف.
+
+**نسخة الرجوع:** `_emergency/rollback/CD-006/2026-09-29/User.pre-item12.php` — SHA1 `82D695E948BDEA201017336A0FB8EE118D114002`.
+
+#### البند 12-b — بوابة منع حذف مستخدم مرتبط بسجلات لا تُحذف تلقائيًا
+
+**القياس الحاسم (لا افتراض):** جُرِّدت **كل** قيود المفاتيح الأجنبية المؤدية إلى `users` من `information_schema`، فتبيّن أنها ليست جدولين كما هو شائع، بل **17 قيدًا** موزّعة على ثلاث قواعد:
+
+| القاعدة | العدد | الجداول |
+|---|---|---|
+| `CASCADE` (تُنظَّف ذاتيًا) | 5 | `user_roles` · `notifications` · `admin_notifications` · `csrf_tokens` · `password_history` |
+| `SET NULL` | 9 | `audit_logs` · `backup_logs` · `backup_settings` · `course_catalog` · `course_evaluations` · `evaluation_schedules` · `form_templates` (×2) · `training_courses` · `workshop_catalog` |
+| **`RESTRICT` (تمنع الحذف)** | **2** | **`evaluations.created_by_user_id`** · **`evaluation_import_batches.uploaded_by_user_id`** |
+
+**تنبيه مُوثَّق:** `evaluations` **لا** ترتبط بـ `users` إلّا عبر `created_by_user_id`؛ المُقيَّم نفسه مُخزَّن كـ `evaluator_employee_id` (موظف) مع لقطة نصية (`evaluator_name` / `evaluator_title`) — فالعدّ على `created_by_user_id` هو العدّ الصحيح، لا غيره.
+
+**التنفيذ:** بوابة في `UserController::destroy()` **بعد** حماية «آخر مدير نشط» و**قبل** `deleteUser()`، تسأل العدّين في استعلام واحد وتوقف الحذف مع `Audit::log('USER_DELETE_BLOCKED_REFERENCES', …)` + `Flash` + إعادة توجيه. البند: `+48/-0` ملف واحد.
+
+**إضافة خارج نصّ البند (مُعلَن للمراجعة):** الحارس يغطي `evaluation_import_batches` أيضًا، لأن قيدها `RESTRICT` أيضًا؛ ولو اكتُفي بـ `evaluations` لبقي مستخدم لديه دفعات استيراد يصل إلى خطأ قاعدة بيانات خام. القيدان من **نفس فئة العطل**، والرسالة تذكر كلاهما معًا بصيغة الجمع الصحيحة (مفرد/جمع).
+
+**تفاصيل تقنية مقيسة:** `Database` يعمل بـ `PDO::ATTR_EMULATE_PREPARES = false` ⇒ استُعمل **placeholder منفصلان** (`:id1` / `:id2`) لأن PDO لا يقبل تكرار نفس الاسم في جملة واحدة، والوضع الافتراضي `FETCH_OBJ` ⇒ القراءة `->evals` لا `['evals']`.
+
+**الإثبات الحاسم — stash (نمط البنود 7/9/11):**
+
+| الحالة | `POST /admin/users/delete` | `USER_DELETE_BLOCKED_REFERENCES` | النتيجة |
+|---|---|---|---|
+| **بدون البوابة** (`git stash`) | **500** | **0 صف** | وصل الطلب إلى قيد FK الخام |
+| **مع البوابة** | **302** | **1 صف** |منع نظيف + رسالة مفهومة |
+
+**سيناريوهان Live (HTTP حقيقي بجلسة وكوكي وCSRF):**
+- **A) مستخدم مرتبط:** `id=2` (`kghamdi`، 3 تقييمات) ⇒ `POST=302`، المستخدم **باقٍ**، **صف تدقيق واحد**، و**لا يظهر أي خطأ `SQLSTATE`/`1452`** في الصفحة.
+- **B) مستخدم بلا مراجع:** مستخدم مؤقت جديد ⇒ `POST=302`، المستخدم **حُذف**، وصف `USER_DELETE` واحد.
+- الدخول تم بمستخدم `Admin` **مؤقت** (لم يُمسّ `sysadmin`)، وكل الـfixtures حُذفت ⇒ DB عاد لخط الأساس `users=4 user_roles=4 orphans=0`.
+
+**الحدود المُلتزَمة:** لا تعديل `User` · لا تعديل `Model` · لا ترحيل DB · لا تغيير في `eval_fk_creator` (بقي `RESTRICT`) ولا في `created_by_user_id` (بقي `NOT NULL`) · لا زر جديد (زر التعطيل/التفعيل موجود مسبقًا في `admin/users/index.php` ولم يُضَف مكرر).
+
+**الإغلاق:** البندان 12 و 12-b مُنفَّذان — hashes في سجل التسليم.
+
 ---
 
 ## إغلاق المرحلة 1 (البنود 1–6) — إلزامي (CP1)

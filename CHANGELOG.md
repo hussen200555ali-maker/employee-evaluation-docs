@@ -26,6 +26,20 @@
 - **مؤجَّل إلى CD-007:** محرفا CJK في `admin-reports/create.php:28` · 9 صفوف `evaluations` يتيمة (7/8/11/12/16) · `testAdminUserControllerGuardStopsNonAdmin` · `RouterTest` · فجوة Audit في `updateRole` · نقطة عمى الأداة (U+FFFD خارج المجموعة بحكم القرار).
 - **نسخة الرجوع:** `_emergency/rollback/CD-006/2026-09-29/AuthTest.pre-item11.php` (SHA1 `2FF0746D71E3EDF2FD977006E4A06AAF162E5556`).
 
+## 2026-09-29 — CD-006 المرحلة 3 / بند 12: حذف الدالة الميتة `User::delete()` / بند 12-b: بوابة منع حذف مستخدم مرتبط
+- **12 — قياس قبل الحذف لا افتراض:** `User::delete($id)` نسخة حرفية من `deleteUser()`. مسح 14 استدعاء `->delete()` في المشروع كلها على نماذج أخرى (صفر على `User`)، وبحث `userModel->delete` / `this->user->delete` / `User::delete` أعاد **صفرًا**، و`app/Core/Model.php` **لا يعرّف `delete()`** ⇒ لا توارث ولا استيراد.
+- **12 — التغيير:** حذف `User::delete($id)` فقط ‎**-11/+0** بلا سطر مضاف؛ والمُبقى `deleteUser($id)` لأنها الحيّة في `UserController::destroy`. الفحوص: `php -l` نظيف · `UserTest` 3/3 · `NotificationTest` 13/13 · `AuthTest` 58/59 · `HelpersTest` 2/3 · DB على خط الأساس.
+- **فشل سابق مُثبت:** `HelpersTest::testConvertToHijriValidDate` فاشل **قبل وبعد** التغيير (مقارنة `git stash` على `User.php` بنتيجة متطابقة) ⇒ لا علاقة له بالحذف.
+- **12-b — القياس الحاسم من `information_schema`:** القيود المؤدية إلى `users` ليست جدولين كما هو شائع بل **17 قيدًا**: `CASCADE` (5) تُنظَّف ذاتيًا · `SET NULL` (9) · **`RESTRICT` (2)** هما `evaluations.created_by_user_id` و`evaluation_import_batches.uploaded_by_user_id`.
+- **تنبيه موثَّق:** `evaluations` ترتبط بـ `users` **فقط** عبر `created_by_user_id`؛ المُقيَّم نفسه `evaluator_employee_id` (موظف) مع لقطة نصية ⇒ العدّ على `created_by_user_id` هو الصحيح.
+- **12-b — التنفيذ:** بوابة في `UserController::destroy()` بعد حماية «آخر مدير نشط» وقبل `deleteUser()`: `Audit::log('USER_DELETE_BLOCKED_REFERENCES', …)` + `Flash` + إعادة توجيه. **+48/-0** ملف واحد، بلا تعديل `User`/`Model` ولا ترحيل DB.
+- **خارج نصّ البند (مُعلَن للمراجعة):** الحارس يغطي `evaluation_import_batches` أيضًا لأن قيدها `RESTRICT` أيضًا؛ الاكتفاء بـ `evaluations` لبقي مستخدم لديه دفعات استيراد يصل إلى خطأ قاعدة بيانات خام. القيدان من نفس فئة العطل والرسالة تذكرهما معًا بصيغة مفرد/جمع صحيحة.
+- **تفاصيل مقيسة:** `EMULATE_PREPARES=false` ⇒ **placeholder منفصلان** (`:id1`/`:id2`) لأن PDO لا يقبل تكرار الاسم في جملة واحدة؛ و`FETCH_OBJ` ⇒ القراءة `->evals` لا `['evals']`.
+- **12-b — إثبات stash الحاسم:** بدون البوابة ⇒ `POST=500` و**0 صف** تدقيق (وصل الطلب إلى قيد FK الخام) · مع البوابة ⇒ `POST=302` و**صف واحد** (منع نظيف).
+- **12-b — إثبات Live (HTTP بجلسة وCSRF):** (أ) `id=2` (`kghamdi`، 3 تقييمات) ⇒ `302`، المستخدم باقٍ، صف تدقيق واحد، و**لا `SQLSTATE`/`1452`** في الصفحة · (ب) مستخدم مؤقت بلا مراجع ⇒ `302` وحُذف مع صف `USER_DELETE`. الدخول بمستخدم `Admin` **مؤقت** (لم يُمسّ `sysadmin`) وكل الـfixtures حُذفت ⇒ `users=4 user_roles=4 orphans=0`.
+- **حدود مُلتزَمة:** لا زر جديد (زر التعطيل/التفعيل موجود في `admin/users/index.php`) · `eval_fk_creator` بقي `RESTRICT` و`created_by_user_id` بقي `NOT NULL` · لا صيني في `admin-reports/create.php`.
+- **نسختا الرجوع:** `_emergency/rollback/CD-006/2026-09-29/User.pre-item12.php` (SHA1 `82D695E948BDEA201017336A0FB8EE118D114002`).
+
 ## 2026-09-28 — CD-006: نقطة تفتيش CP2 — تقرير المرحلة 2 (البنود 7–10)
 - **تسليم** `CD-006_Phase2_Report.md` + `CD-006_Phase2_Report.pdf` (5 صفحات، mPDF RTL بخط DejaVuSans) — تقرير شامل للمرحلة 2 يغطي البنود **7، 8، 9، 10** بنمط تقرير CP1، مع: سجل Git للبنود الأربعة، حالة DB النهائية، الفحوصات الإضافية، الفجوات المُحوَّلة، والتوصيات.
 - **أُضيف** قسم `إغلاق المرحلة 2 (البنود 7–10) — إلزامي (CP2)` إلى `CD-006_IMPLEMENTATION.md`.
