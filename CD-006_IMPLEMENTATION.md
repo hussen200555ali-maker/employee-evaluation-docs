@@ -207,6 +207,51 @@
 
 **نقطة التوقف الإلزامية (2026-09-28):** بعد البند 10 → إرسال **تقرير CP2** + توقف إلزامي. لا بدء البنود 11–12-b قبل الاعتماد.
 
+### بند 8 — تدقيق القيم القديمة/الجديدة في سجل التدقيق
+
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-28 |
+| الحالة | **مُنفَّذ ومُثبَت Live — بانتظار اعتماد المستشار** |
+| الهدف | أن يُظهر `audit_logs` **ما الذي تغيّر** (قيمة قديمة + جديدة) لا **ما الذي حدث** فقط |
+| الملفات | `app/Controllers/Admin/UserController.php` + `app/Controllers/Admin/RoleController.php` — **و`app/Core/Audit.php` بلا تعديل** |
+| الترحيل | **لا ترحيل DB** — `details` عمود `text` موجود أصلًا |
+
+**اكتشاف مُسبق (لم يتغيّر `Audit.php`):** `Audit::log($action,$entityId,$entityType,$details=[])` يستقبل `details array` ويحوّلها إلى JSON في `Audit.php:18`، ويكتب العمود في `Audit.php:33`. أي أن البند 8 مسألة **مراسِل** فقط: من كان يرسل `old/new` بشكل خاطئ أو ناقصًا.
+
+**قرارات المخطّط المعتمدة قبل التنفيذ (استشاري):**
+- **أسماء الإجراءات لا تُوحَّد:** يبقى `USER_ACTIVATED` و`USER_SUSPENDED` كما هما مع إضافة `old`/`new` (لا `USER_STATUS_CHANGE`) — قرار المستشار.
+- **شكل الصلاحيات يُستبدل بالكامل:** `PERMISSION_ADDED` = `old:null` + `new:{role_id,permission_id}`، و`PERMISSION_REMOVED` = `old:{role_id,permission_id}` + `new:null` (بدل `old/new` booleans)، مع بقاء `permission_name` و`actor_id` أعلى المستوى. حارس CSRF في `RoleController::updatePermission` يقرأ `$_POST['csrf_token'] ?? $_POST['_token']` (نمط بند 6) ويقبل أيضًا ترويسة `X-CSRF-Token` عبر `public/index.php:37` — فمسار JSON يمرّ دون تعطيل الحارس.
+- **`RoleController::update`** كان يمرّر `false` كقيمة `old` — تصحيح إلى null.
+
+**التنفيذ:**
+- `UserController::updateRole` — كان `['new_role_id' => $roleId]` فقط؛ صار يجلب الدور القديم **قبل** `updateRole` (لأن `User::updateRole` يحذف كل الأدوار ثم يُدرج الجديد) عبر `\App\Core\Database::getInstance()` → `SELECT role_id FROM user_roles WHERE user_id=:id LIMIT 1`، ثم `Audit::log('USER_ROLE_UPDATE', …, ['old'=>['role_id'=>$old], 'new'=>['role_id'=>$new]])`.
+- `UserController::toggleStatus` — كان بلا `details`؛ صار يلتقط `status` القديم من `findById($userId)->status` قبل التغيير، ويسجّل `['old'=>['status'=>$old], 'new'=>['status'=>$new]]` تحت الإجراء نفسه (`USER_ACTIVATED`/`USER_SUSPENDED`).
+- `RoleController::updatePermission` — `old`/`new` من booleans إلى كائنَي `{role_id, permission_id}` (أو `null` للطرف المقابل).
+- `RoleController::update` — الوصف القديم من `findById($id)->description` قبل `updateRole`، بدل تمرير `false` كـ`old`.
+
+**الإثبات (Live HTTP — Apache + MySQL، قاعدة `employee_evaluation_mvc`):**
+- التهيئة: مستخدم فاعل بدور `Admin` + هدف منفصل لتغيير الدور + هدف منفصل لتبديل الحالة + دوران مؤقتان (`A2Item8_RoleA`=47، `A2Item8_RoleB`=48) + صلاحية `users.view` (id=1). طلبات POST مرّت بحارس CSRF في `public/index.php:37` بترويسة `X-CSRF-Token` المسحوبة من `_token` في نموذج الدخول.
+- **6 عمليات → كلّها HTTP 200**، وسجلات `audit_logs` الناتجة:
+
+| الإجراء | السجل | `details` الفعلية |
+|---|---|---|
+| `USER_ROLE_UPDATE` | #763 | `{"old":{"role_id":47},"new":{"role_id":48}}` |
+| `PERMISSION_ADDED` | #729 | `{"permission_id":1,"permission_name":"users.view","old":null,"new":{"role_id":47,"permission_id":1},"actor_id":648}` |
+| `PERMISSION_REMOVED` | #730 | `{"permission_id":1,"permission_name":"users.view","old":{"role_id":47,"permission_id":1},"new":null,"actor_id":648}` |
+| `ROLE_UPDATE` | #764 | `{"old":{"description":"وصف أولي A"},"new":{"description":"وصف بعد التعديل - بند 8"}}` |
+| `USER_SUSPENDED` | #732 | `{"old":{"status":"active"},"new":{"status":"suspended"}}` |
+| `USER_ACTIVATED` | #733 | `{"old":{"status":"suspended"},"new":{"status":"active"}}` |
+
+- **فحص آلي للأشكال:** 7/7 صفوف `old/new` مطابقة للقواعد أعلاه (الأسماء، الاتجاه، `permission_name` أعلى المستوى). كل الصفوف `utf8=valid` (فحص `mb_check_encoding` على البايتات) — لا تشويش ترميز.
+- **`Audit.php` = 0 سطر تغيير** (`git diff --numstat`) — لم يُمسّ. `php -l` نظيف على الملفات الثلاثة.
+- **السجلات التاريخية سليمة:** `id <= 726` = **246 صفًا** كما قبل التنفيذ بالضبط (بلا إعادة كتابة). صفوف الإثبات الجديدة (38 صفًا، `id 727–764`) باقية كدليل.
+- **التنظيف:** `users` 33 → **30**، `roles` 6 → **4**، `permissions=38` (بلا تغيير)، `user_roles` بلا أي يتيم (0)، `sysadmin` ما زال نشطًا، صلاحيات دور Admin = 35 (بلا تغيير).
+
+**الحدود المُلتزَمة:** لا ترحيل DB ✔ · لا تعديل/حذف السجلات القديمة ✔ · لا تعديل توقيع `Audit::log()` ✔ · لا توحيد أسماء الإجراءات ✔ (قرار المستشار) · لا تعديل `Audit.php` ✔.
+
+**الإغلاق:** البند 8 مُنفَّذ — Commit التسليم `«DELIVERY_HASH»` + Commit التطبيق `«APP_HASH»` (`feat(A2.8): تدقيق القيم القديمة/الجديدة في سجل التدقيق`).
+
 ---
 
 ## إغلاق المرحلة 1 (البنود 1–6) — إلزامي (CP1)

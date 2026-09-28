@@ -1,5 +1,12 @@
 ﻿# سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-28 — CD-006 المرحلة 2 / بند 8: تدقيق القيم القديمة/الجديدة في سجل التدقيق
+- **نطاق التنفيذ:** `app/Controllers/Admin/UserController.php` (سطران) + `app/Controllers/Admin/RoleController.php` (سطران) — **`app/Core/Audit.php` بلا تعديل (0 سطر)** و**بلا ترحيل DB** و**بلا مساس بالسجلات التاريخية**.
+- **الأثر:** `USER_ROLE_UPDATE` صار يحمل `old.role_id` (كان `new_role_id` فقط) · `USER_SUSPENDED`/`USER_ACTIVATED` صارا يحملان `old.status`/`new.status` (كانا بلا `details`) · `PERMISSION_ADDED`/`PERMISSION_REMOVED` انتقلا من booleans إلى `old/new` كائنَي `{role_id, permission_id}` مع إبقاء `permission_name` أعلى المستوى · `ROLE_UPDATE` صار يحمل `old.description` (كان `false`).
+- **الإثبات:** 6 عمليات Live HTTP = 200/200/200/200/200/200، وفحص `audit_logs` الفعلي = 7/7 أشكال `old/new` مطابقة، وكلها `utf8=valid`. السجلات التاريخية `id<=726` = 246 صفًا بلا تغيير. `php -l` نظيف. بيانات الاختبار حُذفت (users→30، roles→4، permissions=38، بلا يتام).
+- **الوثائق المتزامنة:** `CD-006_IMPLEMENTATION.md` (قسم بند 8 + جدول السجلات الستة + فحص الأشكال) و`CHANGELOG.md` الجذر.
+- **نسخة الرجوع:** `_emergency/rollback/CD-006/2026-09-28/{audit,admin-user-controller,admin-role-controller}.pre-item8.php`.
+
 ## 2026-09-28 — اعتماد البند 7 + 12 إصلاحًا توثيقيًا (Commit واحد — بلا تغيير كود)
 - **اعتماد:** البند 7 **معتمد** (توقيع كبير المستشارين 2026-09-28) — «تنفيذ ممتاز». Commit التطبيق `f44d525` بلا تعديل؛ `app/` لم يُمسّ في هذا الـCommit.
 - **الإصلارات الاثنا عشر:** (1) `CD-006_Phase2_Request.md` — hash مفقود الحرف `f` (`44d525` → `f44d525`) · (2، 3) `CD-006_Phase2_Item7_Report.md` — إضافة `ff66d2f` للترويسة + تصحيح سطر مرجع Git · (4) التقرير — إصلاح لصقة «أو حالة» · (5) `13_Security.md:80` — بند خارطة المعالجة #1 معلَّم مُنفَّذًا مع إبقاء (ب/ج/د/هـ) مفتوحة · (6) `13_Security.md:33` — تصحيح مرجع السطر 26 → 25 · (7) `CD-006_OUT_OF_SCOPE.md` — **شطب OOS-8** + «نُقل إلى البند 12-b» · (8) `CD-006_IMPLEMENTATION.md:184` — **إصلاح تشويش ترميز (محارف كورية/صينية)** · (9)IMPLEMENTATION — حالة البند 7 → «معتمد من كبير المستشارين» · (10) IMPLEMENTATION — سجل قرارات Q1–Q5 + نقطة التوقف الإلزامية · (11) `CHANGELOG.md` الجذر + التسليم — مدخل الاعتماد · (12) `CD-006_Phase2_Request.md` — تسجيل الإذن + Guardrail + التوقف بعد البند 10.
