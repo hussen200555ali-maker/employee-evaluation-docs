@@ -252,6 +252,48 @@
 
 **الإغلاق:** البند 8 مُنفَّذ — Commit التسليم `93294f0` + Commit التطبيق `bcb12a7` (`feat(A2.8): تدقيق القيم القديمة/الجديدة في سجل التدقيق`). الإغلاق إلى commit التوثيق: `93294f0`.
 
+### بند 9 — ذرّية استبدال الأدوار في `User::updateRole`
+
+| الحقل | القيمة |
+|---|---|
+| التاريخ | 2026-09-28 |
+| الحالة | **مُنفَّذ ومُثبَت باختبار وحدة — بانتظار اعتماد المستشار** |
+| الخطر المُعالَج | `DELETE` بلا معاملة: لو فشل `INSERT` بعد نجاح الحذف، **يبقى المستخدم بلا دور نهائيًا** |
+| الملفات | `app/Models/User.php` (دالة `updateRole` فقط) + `tests/cases/Models/UserTest.php` (جديد) |
+| الترحيل | **لا ترحيل DB** |
+
+**اكتشاف مُسبق حوّل التصميم:** `user_roles` يحمل القيد `user_roles_ibfk_2 FOREIGN KEY (role_id) REFERENCES roles(id)`، لذا `role_id=999` **يرمي `PDOException` فعلًا (SQLSTATE 23000 / errno 1452)** — فكان اختبار الرول‑باك ممكنًا وحاسمًا بلا تحقق مسبق. كما أن `Database` تملك أصلًا `beginTransaction`/`commit`/`rollBack` (L101–117) و`getPdo()` (L121)، و`Model::$db` هو `Database::getInstance()` نفسه ⇒ المعاملة تغطي الاستعلامين فعليًا.
+
+**التنفيذ** (`app/Models/User.php` — `updateRole`):
+- `$pdo = \App\Core\Database::getInstance()->getPdo()` ثم `beginTransaction()`.
+- `DELETE FROM user_roles WHERE user_id=:user_id` ثم `INSERT INTO user_roles (user_id, role_id) …` ثم `commit()` ⇒ `return true`.
+- `catch (PDOException)`: `if ($pdo->inTransaction()) { $pdo->rollBack(); }` — التراجع **يُرجع الصف المحذوف** فيحتفظ المستخدم بدوره القديم؛ ثم `SELECT id FROM roles WHERE id=:id`:
+  - الدور غير موجود ⇒ `return false` (نمط باقي الدوال، بلا استثناء).
+  - الدور موجود ⇒ `throw $e` (أي خطأ آخر يُعاد كما كان، بلا إخفاء).
+
+**قرارات المستشار (2026-09-28):**
+- **FK + catch/rollback فقط** بلا تحقق مسبق — ليبقى الـrollback مُختبَرًا فعليًا ويطابق اسم الاختبار المطلوب حرفيًا.
+- **بلا Audit عند الفشل** — نص البند 9 لا يطلبه ويقول «لا نُعدّل Audit (البند 8 انتهى)»، والبند 10 وحده يطلب `USER_CREATE_BLOCKED_*`. ⇒ **فجوة مُوثَّقة في تقرير CP2** للمراجعة في CD-007+.
+- `Database.php` و`createUser` و`Audit.php` **بلا مساس**.
+
+**الإثبات (اختبار وحدة على `employee_evaluation_mvc`):**
+- ملف جديد `tests/cases/Models/UserTest.php` (3 حالات) — يكتشفه `tests/runner.php` تلقائيًا (نمط `*Test.php`)، وكل حالة تنشئ بيانات مؤقتة وتُنظّفها في `tearDown()`.
+- `testUpdateRoleRollsBackOnInvalidRole` (الاختبار الحاسم): يمنح المستخدم دورًا مؤقتًا، ثم يمرّر `role_id=999`، ويؤكد ثلاثًا: (أ) `assertFalse` بلا استثناء، (ب) `SELECT role_id FROM user_roles WHERE user_id=X` **ما زال مُساويًا للدور القديم**، (ج) لا صف بدور غير موجود.
+- `testUpdateRoleSucceedsForValidRole` و`testUpdateRoleReplacesAllPreviousRoles` (مستخدم بدورين يصبح له دور واحد — يثبت عدم تغيّر السلوك السليم).
+- **النتيجة: 3/3 نجح.**
+- **إثبات أن الاختبار يكتشف العيب فعليًا (شغل حاسم):** بعد `git stash` مؤقت لإلغاء الإصلاح، فشل الاختبار بخطأ:
+  `SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (user_roles, CONSTRAINT user_roles_ibfk_2 …)` عند `Database.php:66`
+  — أي أن الكود القديم يرمي استثناءً غير ملتقط **بعد أن يكون `DELETE` قد نُفِّذ بالفعل** (والمستخدم بلا دور)، وهو الخطر الموصوف في البند. بعد `git stash pop` رجع 3/3.
+- `php -l` نظيف على الملفين.
+- **لا انحدار:** تشغيل `tests/runner.php` كاملًا أعطى **النتيجة نفسها قبل وبعد** التغيير (مقارنة بخط أساس على الكود القديم: `AuthTest 57/58` · `DatabaseTest 4/5` · `HelpersTest 2/3` · `NotificationTest 13/13`).
+- **حالة DB بعد الاختبارات:** `users=30`, `roles=4`, `user_roles=20`, `permissions=38`, `employees=27`, `audit_logs=284` (بلا تغيير) · بلا يتام في `user_roles` · `sysadmin` نشط · صلاحيات Admin=35.
+
+**إ地发现 جانبي (خارج نطاق البند 9، مُبلَّغ):** `AuthTest` (58 اختبارًا، 11.9 ثانية) **يُنشئ ~14 حساب `cd004.*@test.local` في كل تشغيل ولا ينظّفها** — 26 حسابًا متراكمًا من تشغيلات سابقة (2026-09-21/23) قبل أن أبدأ، و52 حسابًا أنشأتها تشغيلاتي (4 تشغيلات) حذفتُها كلها فورًا لاستعادة خط الأساس بالضبط. هذا **يؤكد قرار المستشار Q3 (تنظيف بقايا بيانات الاختبار في البند 11)** ويجعلها أولوية فيه. كما أن `RouterTest` يُسقط المشغّل بخطأ `View 'errors/404' does not exist.` فيمنع بقية الملفات (ومنها `UserTest`) من التنفيذ ضمن التشغيل الكامل — **خطأ سابق قائم**، لذلك كان إثبات البند 9 عبر `runner.php UserTest` مباشرة.
+
+**الحدود المُلتزَمة:** لا تغيير لبنية `user_roles` ✔ · لا تعديل `createUser` ✔ · لا تغيّر سلوك `updateRole` في الحالات العادية ✔ · لا تعديل `Audit` ✔ · لا ترحيل DB ✔.
+
+**الإغلاق:** البند 9 مُنفَّذ — commit التسليم (هذا الملف) + commit التطبيق `feat(A2.9)`؛ الـhashes الدقيقة تُثبَّت في commit الإغلاق التالي، تمامًا كما أُغلق البند 8 (`93294f0` للتسليم + `bcb12a7` للتطبيق، ثم `1e9de66` للإغلاق).
+
 ---
 
 ## إغلاق المرحلة 1 (البنود 1–6) — إلزامي (CP1)

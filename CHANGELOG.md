@@ -1,5 +1,13 @@
 ﻿# سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-09-28 — CD-006 المرحلة 2 / بند 9: ذرّية استبدال الأدوار في `User::updateRole`
+- **نطاق التنفيذ:** `app/Models/User.php` (دالة `updateRole` فقط) + **ملف اختبار جديد** `tests/cases/Models/UserTest.php`. **بلا ترحيل DB** · بلا تعديل `user_roles` ولا `createUser` ولا `Database.php` ولا `Audit.php`.
+- **الأثر:** `DELETE`+`INSERT` صارا داخل `Transaction` واحدة على نفس اتصال الـsingleton؛ عند فشل `INSERT` (قيد `user_roles_ibfk_2`) يتراجع عن `DELETE` فيحتفظ المستخدم بدوره القديم، ثم يميّز السبب: دور غير موجود ⇒ `false` بلا استثناء، وخطأ آخر ⇒ `throw` كما كان.
+- **الإثبات:** 3/3 اختبار وحدة نجح (أهمّها `testUpdateRoleRollsBackOnInvalidRole`). **وشغل حاسم:** بإلغاء الإصلاح مؤقتًا (`git stash`) يفشل الاختبار بخطأ `SQLSTATE[23000] … 1452` — أي أن الكود القديم يترك المستخدم بلا دور، وهو الخطر المُعالَج. لا انحدار (نتيجة المجموعة الكاملة مطابقة لخط الأساس). `php -l` نظيف · DB بعد الاختبارات: `users=30`, `roles=4`, `user_roles=20`, `permissions=38`, `audit_logs=284` بلا تغيير.
+- **اكتشاف مُوثَّق للـCP2:** `AuthTest` يُنشئ ~14 حساب `cd004.*@test.local` في كل تشغيل ولا ينظّفها (26 متراكمًا سابقًا + 52 من تشغيلاتي حُذفت فورًا لاستعادة خط الأساس) — يؤكد أولوية تنظيف البند 11 (قرار المستشار Q3). و`RouterTest` يُسقط المشغّل بـ`View 'errors/404' does not exist.` — خطأ سابق قائم.
+- **فجوة مُوثَّقة للـCP2:** فشل تغيير الدور لا يُسجَّل في `audit_logs` (بلا Audit بنص البند 9) ⇒ مراجعة في CD-007+.
+- **نسخة الرجوع:** `_emergency/rollback/CD-006/2026-09-28/user-model.pre-item9.php`.
+
 ## 2026-09-28 — CD-006 المرحلة 2 / بند 8: تدقيق القيم القديمة/الجديدة في سجل التدقيق
 - **نطاق التنفيذ:** `app/Controllers/Admin/UserController.php` (سطران) + `app/Controllers/Admin/RoleController.php` (سطران) — **`app/Core/Audit.php` بلا تعديل (0 سطر)** و**بلا ترحيل DB** و**بلا مساس بالسجلات التاريخية**.
 - **الأثر:** `USER_ROLE_UPDATE` صار يحمل `old.role_id` (كان `new_role_id` فقط) · `USER_SUSPENDED`/`USER_ACTIVATED` صارا يحملان `old.status`/`new.status` (كانا بلا `details`) · `PERMISSION_ADDED`/`PERMISSION_REMOVED` انتقلا من booleans إلى `old/new` كائنَي `{role_id, permission_id}` مع إبقاء `permission_name` أعلى المستوى · `ROLE_UPDATE` صار يحمل `old.description` (كان `false`).
