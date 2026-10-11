@@ -1,5 +1,17 @@
 # سجل التغييرات — حزمة CD-001 / توثيق الوحدات
 
+## 2026-10-12 — CD-007 / OOS-10: محارف صينية في `app/Views/admin-reports/create.php`
+
+- **القياس:** `Select-String` عن `[\u4E00-\u9FFF]` في الملف = **سطر واحد (28)** → **0** بعد الإصلاح. المحرفان `U+52B2` و`U+6001` في placeholder حقل `report_title` — موجودان منذ أول التزام للملف (`6cfa863`، baseline CD-006) أي خلل زمن التأليف لا انحدار.
+- **التشخيص:** نص عرض (placeholder) لا تعليق ولا قيمة بيانات. البديل العربي الصحيح «الأداء» (العبارة السائدة: `ReportPDF.php:11` · `reports/builder.php:21` · `ReportsController.php:51`).
+- **الإصلاح:** `placeholder="مثال: تقرير الأداء الإداري"` — سطر واحد (`تغيير 1 +1/−1`).
+- **الفحص الشامل `app/` خارج `pChart/`:** كل الملفات النصية بأي امتداد → **0 محارف CJK/Kana/Hangul** — قائمة الجرد لـOOS-11 **فارغة**.
+- **الفحص الحي:** عرض صفحة `admin/reports/create` عبر `AdminReportController@create` بجلسة Admin كاملة — تُرسم (لا 403) 61,633 محرفًا، النص العربي ظاهر، صفر بايتات CJK. **درس محقن:** أول محاولة أعطت 403 لجلسة ناقصة `user_roles` — قياس خاطئ لا يُعتمَد.
+- **الاختبارات:** 93/93 · فشل 0 · أخطاء 0 · بلا ترحيل DB.
+- **التوثيق:** `CD-007_OOS_Resolution.md` قسم OOS-10 + سطر الإغلاق · `CD-006_IMPLEMENTATION.md` **§2.11** (جرد CJK الحتمي + الفحص الحي بجلسة كاملة + نقل فواصل النطاق صراحة) · `CHANGELOG.md` (تسليم + جذر).
+- **نسخة الرجوع:** `_emergency/rollback/CD-007/2026-10-12/OOS-10/create.pre-item10.php`.
+- **التالي:** `OOS-11` — بوابة BOM الإلزامية على كل ملف + pChart (14 سطر allowlist).
+
 ## 2026-10-12 — CD-007 / OOS-13: تدقيق فشل `updateRole`
 
 - **القياس:** `USER_ROLE_UPDATE_FAILED` بعد فشل `updateRole` = **0 → 1**. تفاصيل الفحص: `{"role_id":999,"reason":"invalid_role_or_transaction_failed"}` · الدور لم يُسنَد · Flash `danger` واضحة.
