@@ -3,7 +3,7 @@
 سجل حيّ لكل بند من بنود OOS في CD-007: سبب الجذر، الإجراء، القياس، والدليل.
 يُحدَّث بعد كل بند. الأرقام فيه **مقيسة لا مقدَّرة**.
 
-**الحالة:** المسار B — `OOS-1` و `OOS-9` مُغلقان · `OOS-13` قيد الانتظار.
+**الحالة:** المسار B — `OOS-1` و `OOS-9` و `OOS-13` مُغلقون · `OOS-10` قيد الانتظار.
 
 ---
 
@@ -222,6 +222,75 @@ UTF-16 ومرّ النص بترميز الطرفية: **123** علامة است�
 
 ---
 
+---
+
+## OOS-13 — تدقيق فشل `updateRole`
+
+**الحالة: مُغلق**
+
+### السبب
+
+`UserController::updateRole` كان يفشل بصمت بلا أثر قابل للتتبّع: عند إرسال
+`role_id` غير موجود كان `User::updateRole` يُرجع `false` بعد rollback (سلوك
+المودل معياري ومقصود منذ البند 9)، والمتحكّم يكتفي برسالة عامة. **القياس
+قبل:** `SELECT COUNT(*) FROM audit_logs WHERE action='USER_ROLE_UPDATE_FAILED'`
+= **0**.
+
+### الإصلاح (في المتحكّم فقط — لا تعديل على `User::updateRole`)
+
+```
+try {
+    if ($userModel->updateRole($userId, $roleId)) {
+        // النجاح: USER_ROLE_UPDATE (القيم القديمة/الجديدة) كما كان
+        ...
+    } else {
+        Audit::log('USER_ROLE_UPDATE_FAILED', $userId, 'users', [
+            'role_id' => (int)$roleId,
+            'reason'  => 'invalid_role_or_transaction_failed',
+        ]);
+        Flash::set('تعذّر تحديث دور المستخدم: الدور المحدد غير موجود.', 'danger');
+    }
+} catch (Exception $e) {
+    Audit::log('USER_ROLE_UPDATE_FAILED', $userId, 'users', [
+        'role_id' => (int)$roleId,
+        'error'   => $e->getMessage(),
+    ]);
+    throw $e;
+}
+```
+
+الشكل **موقّعي** (`log($action, $entity_id, $entity_type, $details)`) —
+الدرس المستخرج من OOS-1.
+
+### القياس
+
+| المعيار | قبل | بعد |
+|---|---|---|
+| `USER_ROLE_UPDATE_FAILED` بعد فشل | 0 | **1** |
+| `USER_ROLE_UPDATE` بعد فشل | — | بلا تغيير (7) |
+| `USER_ROLE_UPDATE` بعد نجاح (ضبط موجب) | — | +1 (7 → 8) |
+| `USER_ROLE_UPDATE_FAILED` بعد نجاح | — | 0 |
+
+**فحص `details` الفعلي:** `{"role_id":999,"reason":"invalid_role_or_transaction_failed"}`
+· الدور لم يُسنَد فعلًا (`user_roles` للمستهدف = 0) · **Flash واضحة:** `danger`
+مع «تعذّر تحديث دور المستخدم: الدور المحدد غير موجود.» · ضبط موجب: الدور أُسند
+(id=167) وFlash `success`.
+
+### الاختبارات
+
+اختبار جديد `testUpdateRoleFailureAuditLog` في
+`tests/cases/Controllers/UserControllerTest.php` (بالعملية الفرعية لأن المتحكّم
+ينتهي بـ`exit()`): `_FAILED`=1 بالتفاصيل، `USER_ROLE_UPDATE`=0 للمستهدف عند
+الفشل. **93/93** · فشل 0 · أخطاء 0.
+
+### نسخة الرجوع
+
+`_emergency/rollback/CD-007/2026-10-12/OOS-13/`
+— `UserController.pre-item13.php` · `User.pre-item13.php` (لا rollback DB —
+لا ترحيل). الاسترجاع: إعادة الملفين + commit عكسي.
+
+---
+
 ## OOS-18 — تجاوز `isAdmin()` في فحص الصلاحيات
 
 **الحالة: مفتوح** — مُسجَّل هنا، ويُعالَج في **CD-008** بعد CP5.
@@ -248,6 +317,7 @@ UTF-16 ومرّ النص بترميز الطرفية: **123** علامة است�
 | 2026-10-06 | تصحيح عدد الملفات | معتمد | `e734501` |
 | 2026-10-06 | **OOS-1** | **مُغلق** | `8ba0100` · 92/92 |
 | 2026-10-06 | **OOS-9** | **مُغلق** | `d5646bb` · يتيمة 9→0 · Audit 1018 |
+| 2026-10-12 | **OOS-13** | **مُغلق** | `fix(OOS-13)` · `_FAILED` 0→1 · 93/93 |
 
-**البنود المتبقية:** `OOS-13` · `OOS-10` · `OOS-11` · `OOS-12` ·
+**البنود المتبقية:** `OOS-10` · `OOS-11` · `OOS-12` ·
 `OOS-2…7` · **OOS-18** (CD-008) · ودراسة A3.

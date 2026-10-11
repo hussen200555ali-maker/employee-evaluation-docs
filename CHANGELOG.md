@@ -1,4 +1,13 @@
-﻿# سجل التغييرات — حزمة CD-001 / توثيق الوحدات
+# سجل التغييرات — حزمة CD-001 / توثيق الوحدات
+
+## 2026-10-12 — CD-007 / OOS-13: تدقيق فشل `updateRole`
+
+- **القياس:** `USER_ROLE_UPDATE_FAILED` بعد فشل `updateRole` = **0 → 1**. تفاصيل الفحص: `{"role_id":999,"reason":"invalid_role_or_transaction_failed"}` · الدور لم يُسنَد · Flash `danger` واضحة.
+- **ضبط موجب:** `USER_ROLE_UPDATE` **7 → 8** عند النجاح، بلا `_FAILED`، والدور أُسند فعلًا.
+- **الإصلاح:** `UserController::updateRole` فقط — `try/catch` حول الاستدعاء؛ عند `false` يسجّل `USER_ROLE_UPDATE_FAILED` (شكل موقّعي) بـ`role_id`+`reason`، وعند استثناء بـ`error` ثم يعيد الإلقاء. **لا تعديل على `User::updateRole`.**
+- **الاختبارات:** 93/93 (جديد: `testUpdateRoleFailureAuditLog` في `tests/cases/Controllers/UserControllerTest.php`، عملية فرعية لأن المتحكّم يخرج بـ`exit()`). بلا ترحيل DB.
+- **التوثيق:** `CD-007_OOS_Resolution.md` قسم OOS-13 · `CD-006_OUT_OF_SCOPE.md` إغلاق · `CD-006_IMPLEMENTATION.md` **§§2.5-bis و2.8 و2.9** (الفحص المستقل في الكتابة · قاعدة `--result-file` واختبار الاسترجاع وتصحيح التسمية · اختبار ملف التراجع قبل الاعتماد) و**§2.10** (قواعد OOS-1 + درس OOS-13).
+- **التالي:** المسار C — `OOS-10`.
 
 ## 2026-10-06 — CD-007 / OOS-9: إعادة ربط 9 صفوف `evaluations` يتيمة إلى `sysadmin`
 
