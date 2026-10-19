@@ -1,31 +1,36 @@
 <?php
 /**
- * فحص ترميز مستندات التسليم — البند 11-b / الخطوة 4 (CD-006)
+ * فحص ترميز مستندات التسليم وكود التطبيق — البند 11-b (CD-006) / OOS-11 / OOS-12
  *
  * الاستخدام:
- *   php scripts/check-encoding.php                 # فحص النطاق الافتراضي
- *   php scripts/check-encoding.php <path> [...]     # ملف/مجلد (يُوسَّع المجلد تكراريًا)
+ *   php scripts/check-encoding.php [--path=delivery|app|all] [--warn-only] [<path> ...]
  *
- * النطاق الافتراضي: CD-001_delivery/*.md + CHANGELOG.md (مستند التسليم).
- * عند تمرير مجلد، تُجمع الملفات النصية داخله تكراريًا (بحسب الامتداد).
+ *   --path=delivery   (افتراضي) مستندات التسليم: CD-001_delivery/*.md + <appRoot>/CHANGELOG.md
+ *   --path=app        كود التطبيق: <appRoot>/app/** /*.php + *.inc + *.phtml
+ *   --path=all        كلا النطاقين (للاستخدام اليدوي فقط — لا يستخدمه خطاف)
+ *   --warn-only       لا يُرجع exit=1 أبدًا (تقرير فقط للاستخدام اليدوي)
+ *   <path> ...        ملف/مجلد صريح (يتجاوز --path) — يُوسَّع المجلد تكراريًا
+ *
+ * القرار المعماري (المستشار 2026-10-19): النطاق منفصل لكل مستودع، بلا مسارات مطلقة:
+ *   خطاف التسليم  → `php scripts/check-encoding.php --path=delivery`
+ *   خطاف التطبيق  → `php ../CD-001_delivery/scripts/check-encoding.php --path=app`
  *
  * مجموعة الكشف (كما اعتمدها المستشار):
  *   CJK      U+4E00–U+9FFF
  *   Kana     U+3040–U+30FF
  *   Hangul   U+AC00–U+D7AF
  *   Cyrillic U+0400–U+04FF
- *   U+FFFD   محرف الاستبدال — أُضيف في OOS-11 (كان خارج النطاق بحكم القرار)
+ *   U+FFFD   محرف الاستبدال — أُضيف في OOS-11
  * + التحقق من صلاحية UTF-8.
- * + فحص BOM (إلزامي بلا استثناء — OOS-11):
- *   UTF-8 BOM (EF BB BF) · UTF-16 LE (FF FE) · UTF-16 BE (FE FF)
+ * + فحص BOM (إلزامي — OOS-11): UTF-8 (EF BB BF) · UTF-16 LE (FF FE) · UTF-16 BE (FE FF).
  *
  * الاستثناء الوحيد (allowlist): مكتبة طرف ثالث `app/Libraries/pChart/**`.
- *   - مجموعة U+FFFD/الترميز: تُعفى كل امتدادات pChart (طرف ثالث موثّق — 17 حالة).
+ *   - مجموعات U+FFFD/الترميز: تُعفى كل امتدادات pChart (طرف ثالث موثّق).
  *   - فحص BOM: يُعفى داخل pChart للملفات **غير التنفيذية** فقط (.log/.txt/.md/…).
- *     ملفات pChart التنفيذية (.php) **لا تُعفى** من BOM (كارثية: headers already
- *     sent)؛ أي حالة تُدرَج ضمن OOS-12. (مُثبت: pChart .php خالية من BOM — OOS-11.)
+ *     ملفات pChart التنفيذية (.php) لا تُعفى من BOM (كارثية: headers already sent).
+ *     (مُثبت: pChart .php خالية من BOM — OOS-11.)
  *
- * المخرجات: 0 = نظيف · 1 = تسرّب · 2 = خطأ استخدام.
+ * المخرجات: 0 = نظيف · 1 = تسرّب (إلا مع --warn-only) · 2 = خطأ استخدام.
  *
  * التشغيل على ويندوز:  C:\xampp\php\php.exe scripts\check-encoding.php
  * أو عبر متغيّر البيئة PHP_BIN، أو `php` إن كان في PATH.
@@ -33,8 +38,8 @@
 
 declare(strict_types=1);
 
-$repoRoot = dirname(__DIR__); // مستودع التسليم
-$delivery = dirname($repoRoot); // جذر المشروع
+$deliveryDir = dirname(__DIR__);        // CD-001_delivery
+$appRoot     = dirname($deliveryDir);   // جذر التطبيق (employee-evaluation)
 
 /** @var array<string,array{0:string,1:string}> مجموعات الكشف المحظورة */
 const FORBIDDEN_RANGES = [
@@ -54,16 +59,21 @@ const PCHART_DIR = 'app/Libraries/pChart/';
  */
 const EXECUTABLE_EXTENSIONS = ['php', 'phtml', 'inc'];
 
-/** امتدادات الملفات النصية عند توسيع المجلدات. */
+/** امتدادات الملفات النصية عند توسيع مجلد صريح. */
 const TEXT_EXTENSIONS = [
     'php', 'phtml', 'inc', 'md', 'txt', 'js', 'mjs', 'css', 'html', 'htm',
     'json', 'csv', 'log', 'cmd', 'bat', 'ps1', 'sql', 'yml', 'yaml', 'ini', 'xml',
 ];
 
-/** @return bool هل الامتداد نصيًا؟ */
-function isTextFile(string $path): bool
+/** امتدادات كود التطبيق عند `--path=app`. */
+const APP_EXTENSIONS = ['php', 'inc', 'phtml'];
+
+const VALID_SCOPES = ['delivery', 'app', 'all'];
+
+/** @return bool هل الامتداد ضمن القائمة؟ */
+function hasExtension(string $path, array $extensions): bool
 {
-    return in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), TEXT_EXTENSIONS, true);
+    return in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), $extensions, true);
 }
 
 /** @return string|null وصف BOM إن وُجد، وإلا null. */
@@ -96,16 +106,74 @@ function isPchartBomAllowed(string $path): bool
     if (!isPchart($path)) {
         return false;
     }
-    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-    return !in_array($ext, EXECUTABLE_EXTENSIONS, true);
+    return !hasExtension($path, EXECUTABLE_EXTENSIONS);
+}
+
+/** @return array<int,string> كل الملفات ذات الامتدادات المطلوبة تحت مجلد (تكراريًا). */
+function collectRecursive(string $dir, array $extensions): array
+{
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $out = [];
+    $it = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)
+    );
+    foreach ($it as $f) {
+        if ($f->isFile() && hasExtension($f->getPathname(), $extensions)) {
+            $out[] = $f->getPathname();
+        }
+    }
+    return $out;
+}
+
+/** نطاق التسليم: مستندات التسليم + سجل جذر التطبيق (موقع التلف التاريخي). */
+function scopeDelivery(string $deliveryDir, string $appRoot): array
+{
+    $files = glob($deliveryDir . '/*.md') ?: [];
+    $rootChangelog = $appRoot . '/CHANGELOG.md';
+    if (is_file($rootChangelog)) {
+        $files[] = $rootChangelog;
+    }
+    return $files;
+}
+
+/** نطاق التطبيق: app/** /*.php + *.inc + *.phtml (allowlist pChart يبقى مطبَّقًا). */
+function scopeApp(string $appRoot): array
+{
+    return collectRecursive($appRoot . '/app', APP_EXTENSIONS);
+}
+
+/**
+ * يحلّل الوسائط.
+ * @return array{0:string,1:bool,2:array<int,string>} [النطاق، warnOnly، المسارات الصريحة]
+ */
+function parseOptions(array $argv): array
+{
+    $scope = 'delivery';
+    $warnOnly = false;
+    $explicit = [];
+    foreach (array_slice($argv, 1) as $a) {
+        if (str_starts_with($a, '--path=')) {
+            $scope = substr($a, 7);
+        } elseif ($a === '--warn-only') {
+            $warnOnly = true;
+        } elseif ($a === '-h' || $a === '--help') {
+            fwrite(STDOUT, "Usage: php check-encoding.php [--path=delivery|app|all] [--warn-only] [<path> ...]\n");
+            exit(0);
+        } else {
+            $explicit[] = $a;
+        }
+    }
+    return [$scope, $warnOnly, $explicit];
 }
 
 /** @return array<int,string> المسارات المفحوصة */
-function targetFiles(array $argv, string $repoRoot, string $delivery): array
+function targetFiles(string $deliveryDir, string $appRoot, string $scope, array $explicit): array
 {
-    $explicit = array_slice($argv, 1);
+    $files = [];
+
     if ($explicit !== []) {
-        $out = [];
         foreach ($explicit as $p) {
             $abs = realpath($p);
             if ($abs === false) {
@@ -113,40 +181,39 @@ function targetFiles(array $argv, string $repoRoot, string $delivery): array
                 continue;
             }
             if (is_dir($abs)) {
-                $it = new RecursiveIteratorIterator(
-                    new RecursiveDirectoryIterator($abs, FilesystemIterator::SKIP_DOTS)
-                );
-                foreach ($it as $f) {
-                    if ($f->isFile() && isTextFile($f->getPathname())) {
-                        $out[] = $f->getPathname();
-                    }
-                }
-                continue;
-            }
-            if (is_file($abs)) {
-                $out[] = $abs;
+                $files = array_merge($files, collectRecursive($abs, TEXT_EXTENSIONS));
+            } elseif (is_file($abs)) {
+                $files[] = $abs;
             }
         }
-        sort($out);
-        return $out;
+    } else {
+        if ($scope === 'delivery' || $scope === 'all') {
+            $files = array_merge($files, scopeDelivery($deliveryDir, $appRoot));
+        }
+        if ($scope === 'app' || $scope === 'all') {
+            $files = array_merge($files, scopeApp($appRoot));
+        }
     }
 
-    $files = glob($repoRoot . '/*.md') ?: [];
-    // CHANGELOG.md في جذر التطبيق مشمول صراحةً (وهو موقع التلف التاريخي)
-    $rootChangelog = $delivery . '/CHANGELOG.md';
-    if (is_file($rootChangelog)) {
-        $files[] = $rootChangelog;
-    }
+    $files = array_values(array_unique($files));
+    sort($files);
     return $files;
 }
 
-$files = targetFiles($argv, $repoRoot, $delivery);
-if ($files === []) {
-    fwrite(STDERR, "لا توجد ملفات للفحص.\n");
+[$scope, $warnOnly, $explicit] = parseOptions($argv);
+
+if (!in_array($scope, ['delivery', 'app', 'all'], true)) {
+    fwrite(STDERR, "  ! نطاق غير معروف: --path=$scope (المسموح: delivery|app|all)\n");
     exit(2);
 }
 
-echo "فحص ترميز المستندات/الملفات — البند 11-b\n";
+$files = targetFiles($deliveryDir, $appRoot, $scope, $explicit);
+if ($files === []) {
+    fwrite(STDERR, "لا توجد ملفات للفحص (--path=$scope).\n");
+    exit(2);
+}
+
+echo "فحص ترميز — البند 11-b · النطاق: $scope\n";
 echo "المجموعة: CJK + Kana + Hangul + Cyrillic + U+FFFD · وفحص BOM (UTF-8/UTF-16)\n";
 echo str_repeat('-', 62) . "\n";
 
@@ -221,6 +288,11 @@ printf("فُحص %d ملفًا / %d سطرًا — التسرّب: %d\n", count(
 
 if ($leaks === 0) {
     echo "النتيجة: نظيف ✔\n";
+    exit(0);
+}
+
+if ($warnOnly) {
+    echo "النتيجة: تسرّب محارف/BOM (وضع --warn-only) ⚠\n";
     exit(0);
 }
 

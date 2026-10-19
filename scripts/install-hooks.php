@@ -7,7 +7,9 @@
  *   php scripts/install-hooks.php --status   # عرض الحالة فقط
  *   php scripts/install-hooks.php --uninstall
  *
- * النطاق: مستودع التسليم CD-001_delivery فقط (بقرار صريح).
+ * النطاق: مستودع التسليم CD-001_delivery فقط (بقرار صريح — OOS-12).
+ *   الخطاف يمرّر `--path=delivery` صراحةً، فلا يتأثّر بالافتراضي ولا يمسّ كود
+ *   التطبيق (app/**) عند commit مستندات التسليم.
  * الخطاف يدير كتلته بعلامة-marker، فإعادة التشغيل تستبدل الكتلة ولا تُكرّرها،
  * ويأخذ نسخة احتياطية من أي خطاف سابق غير مُدار في pre-commit.cd006.bak.
  *
@@ -102,7 +104,7 @@ function managedBlock(string $root): string
         . "  echo \"pre-commit: تعذّر تحديد php — تُخطّى بوابة الترميز (PHP_BIN=… أو CD006_GUARD_DISABLED=1)\" >&2\n"
         . "  exit 0\n"
         . "fi\n"
-        . "if ! \"\$_cd006_php\" \"" . $checker . "\"; then\n"
+        . "if ! \"\$_cd006_php\" \"" . $checker . "\" --path=delivery; then\n"
         . "  echo \"\" >&2\n"
         . "  echo \"pre-commit: أُوقف الـ commit — تسرّب محارف ممنوعة في مستندات التسليم.\" >&2\n"
         . "  exit 1\n"

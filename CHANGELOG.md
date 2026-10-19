@@ -349,3 +349,4 @@
 ---
 
 **نهاية سجل التغييرات — CD-001/CD-003/CD-004**
+[2026-10-19] OOS-12 closed: check-encoding.php now supports --path=delivery|app|all, hook passes --path=delivery, app/ scanned clean (426/73177), 6 negative tests, all 93 tests pass.
