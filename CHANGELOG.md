@@ -1,3 +1,14 @@
+## 2026-10-21 — CD-014 (v0.2.0): OOS-18 مُغلق + وسم v0.1.1-pilot
+
+- **الوسم:** `v0.1.1-pilot` على المستودعين (النسخة الآمنة الجاهزة للإنتاج — CD-013).
+- **المرجع:** التوجيه الاستشاري CD-014 (بدء الإصدار v0.2.0) + قرار كبير المستشارين 2026-10-21.
+- **OOS-18 (مُغلق):** إزالة تجاوز `isAdmin()` من `Auth::userHasPermission()` — القرار: **البيانات مصدر الحقيقة**.
+  - **ترحيل:** `2026_10_21_CD014_oos18_admin_full_permissions.sql` يمنح دور Admin كل الصلاحيات (36→**38**؛ الناقصتان `evaluations.view.team` · `evaluations.create.team`) عبر `INSERT ... SELECT ... WHERE NOT EXISTS` (متكرر الآمن). المحفّز يكبّر `permissions_version` تلقائيًا (sysadmin 9→11).
+  - **الكود:** حُذف شرط `self::isAdmin()` من `userHasPermission` (فحص بيانات خالص).
+  - **اختبارات:** استُبدل `testUserHasPermissionAdminBypass` بـ `testUserHasPermissionNoAdminBypass` + أُضيف `testAdminHoldsAllPermissionsFromData` (تحقق Admin=38/38 من البيانات). حُدِّثت تبعيتان عرضيتان على التجاوز (`AuthTest::testAdminUserControllerGuardStopsNonAdmin` · `UserControllerTest`) لتعبئة الصلاحيات من DB. أُصلح جمود `runCli()` (قراءة متزامنة للأنابيب).
+  - **الأدلة:** Admin=38/38 من البيانات · Admin يُرفض لصلاحية وهمية (إثبات إزالة التجاوز) · Staff يُرفض لـ`users.view` · 112/1 تخطّيت · `check-encoding --path=app`=433/تسرّب 0 · `git diff --check`=exit=0.
+  - **البند التالي في CD-014:** OOS-2..6 (Role Hierarchy/القوالب/العمليات الجماعية/تقارير A2) ثم OOS-20 (كاش التقارير).
+
 ## 2026-10-21 — CD-013: جاهزية الإنتاج (OOS-19 + أدلة التسليم، وOOS-20 مؤجَّل)
 
 - **المرجع:** التوجيه الاستشاري CD-013 (ما بعد الإطلاق التجريبي).
