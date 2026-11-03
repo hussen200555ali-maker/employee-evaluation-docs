@@ -1,3 +1,10 @@
+## 2026-11-03 — CD-020 / Sprint 2: شعار وتوقيعات التقارير + AveragesEngine
+
+- **المهمة 1 (شعار + توقيعات):** إضافة الشعار وكتلة التوقيعات (الموظف/المدير المباشر/مدير HR) إلى تصدير PDF وExcel وWord في `ReportExportService`.
+- **المهمة 2 (AveragesEngine):** استخلاص منطق حساب المتوسطات إلى `app/Services/AveragesEngine.php`. `EmployeeReportService` يفوّض الحسابات إليه. الواجهة لم تتغير.
+- **الاختبارات:** +6 اختبارات (3 للترويسة + 3 للمتوسطات). الإجمالي المتوقع: **117/117 PASS**.
+- **الفجوات المغلقة:** G11 (الترويسة) + D3 (استخلاص AveragesEngine).
+
 ## 2026-11-03 — OOS-21: تأجيل ترقية PhpSpreadsheet
 
 - توثيق تنبيهات Composer الثلاثة للنسخة `phpoffice/phpspreadsheet` 1.30.6 (SSRF، استنزاف موارد ODS، وXXE/DoS).
