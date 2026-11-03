@@ -21,6 +21,24 @@
 - إضافة عرض النسخ المحفوظة وتصدير PDF وExcel وWord من بيانات الأرشيف، مع اختبارات تكامل.
 - التحقق: **109 نجاح، 0 فشل، 0 أخطاء**؛ بوابة ترميز التطبيق نظيفة. التفاصيل في `CD-018_Implementation.md`.
 
+## 2026-11-03 — CD-017: ملف الموظف وسجل التقييمات
+
+- إضافة المسار `GET /employees/profile/:id` والدالة `EmployeeController::profile()` المحمية بصلاحية `employees.profile`.
+- تعمير `app/Views/employees/profile.php` (0→190 سطر) بـ 4 تبويبات: البيانات · التقييمات · التقارير · الإجراءات.
+- إضافة `EmployeeReportService` (5 متوسطات + `summarizeByYear()` مع استثناء السنوات الفارغة).
+- ترحيل `2026_11_03_CD017_employee_profile_permission.sql` يضيف صلاحية `employees.profile`.
+- إضافة `EmployeeReportServiceTest` (2 حالة).
+- التحقق: **107 نجاح، 0 فشل، 0 أخطاء**؛ تفاصيل في `CD-017_Implementation.md`.
+
+## 2026-11-03 — CD-016: تأسيس بيانات التقييم وسلم التقديرات
+
+- إضافة جدول `grading_scales` بـ 5 صفوف للسلم الخماسي (ممتاز/جيد جداً/جيد/مقبول/ضعيف).
+- أعمدة على `evaluations`: `evaluation_type` ENUM + `final_grade_label` + `final_grade_value`.
+- أعمدة على `form_templates`: `evaluation_mode` ENUM + `evaluation_frequency` ENUM.
+- صلاحية `grading_scales.manage` + `GradingScale` model + `GradingScaleController`.
+- اختباران: `GradingScaleTest` + `TemplateEvaluationMetadataTest`.
+- التحقق: **105 نجاح، 0 فشل، 0 أخطاء**؛ تفاصيل في `CD-016_Implementation.md`.
+
 ## 2026-11-03 — CD-015: إزالة طبقة التقارير والتحليلات
 
 - توثيق حذف وحدات التقارير والتحليل والأرشيف الإدارية القديمة وروابطها وأصولها، مع الحفاظ على بيانات التقييمات والموظفين والتدريب الأساسية.
