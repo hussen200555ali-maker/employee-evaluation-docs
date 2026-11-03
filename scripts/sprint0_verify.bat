@@ -41,13 +41,44 @@ echo [1.3] mysqldump version:
 %MYSQLDUMP% --version 2>&1
 echo.
 
+REM --- Preflight: backup before any database mutation ---
+echo ############################################################
+echo #  PREFLIGHT: DATABASE BACKUP (BEFORE MIGRATIONS)
+echo ############################################################
+echo.
+if not exist backups mkdir backups
+for /f %%I in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH-mm-ss"') do set TS=%%I
+if not defined TS (
+    echo RESULT[0.1]: FAIL - could not generate a backup filename
+    exit /b 1
+)
+set BACKUPFILE=backups\sprint0_backup_%TS%.sql
+echo [0.1] Running mysqldump to %BACKUPFILE%:
+%MYSQLDUMP% -u root --routines --triggers --single-transaction --default-character-set=utf8mb4 --result-file="%BACKUPFILE%" %DB% 2>&1
+if errorlevel 1 (
+    echo RESULT[0.1]: FAIL - mysqldump error; stopping before migrations
+    exit /b 1
+)
+if not exist "%BACKUPFILE%" (
+    echo RESULT[0.1]: FAIL - backup file missing; stopping before migrations
+    exit /b 1
+)
+for %%A in ("%BACKUPFILE%") do set BACKUPSIZE=%%~zA
+if !BACKUPSIZE! LSS 50000 (
+    echo RESULT[0.1]: FAIL - backup is unexpectedly small; stopping before migrations
+    exit /b 1
+)
+echo RESULT[0.1]: PASS - backup size !BACKUPSIZE! bytes
+set /a PASS+=1
+echo.
+
 REM --- Section 2: composer install ---
 echo ############################################################
 echo #  SECTION 2: COMPOSER INSTALL
 echo ############################################################
 echo.
 echo [2.1] Running composer install --no-dev --optimize-autoloader...
-call composer install --no-dev --optimize-autoloader 2>&1 | findstr /R "Installing Generating Nothing Package Loading"
+call composer install --no-dev --optimize-autoloader
 if errorlevel 1 (
     echo RESULT[2.1]: FAIL - composer install error
     set /a FAIL+=1
@@ -149,22 +180,12 @@ echo.
 
 REM --- Section 8: Immutability test ---
 echo ############################################################
-echo #  SECTION 8: IMMUTABILITY TEST (UPDATE must FAIL with 45000)
+echo #  SECTION 8: IMMUTABILITY TRIGGERS (READ-ONLY CHECK)
 echo ############################################################
 echo.
-echo [8.1] Insert test snapshot:
-%MYSQL% -u root %DB% -e "INSERT INTO report_snapshots (report_number, employee_id, created_by_user_id, snapshot_json) VALUES ('ER-TEST-00000001', (SELECT id FROM employees LIMIT 1), (SELECT id FROM users LIMIT 1), '{\"\"test\"\":true}');" 2>&1
-echo.
-echo [8.2] Attempt UPDATE on snapshot (EXPECTED TO FAIL with error 1644/45000):
-%MYSQL% -u root %DB% -e "UPDATE report_snapshots SET snapshot_json='{\"\"hacked\"\":true}' WHERE report_number='ER-TEST-00000001';" 2>&1
-echo   ^> If you see "Report snapshots are immutable" or error 1644 above, that is SUCCESS.
-echo.
-echo [8.3] Attempt DELETE on snapshot (EXPECTED TO FAIL):
-%MYSQL% -u root %DB% -e "DELETE FROM report_snapshots WHERE report_number='ER-TEST-00000001';" 2>&1
-echo   ^> If you see "Report snapshots are immutable" or error 1644 above, that is SUCCESS.
-echo.
-echo [8.4] Cleanup test row (via direct DBA bypass - temporary disable trigger):
-echo   (Skipping auto-cleanup; if test row remains it is harmless - it has TEST in serial)
+echo [8.1] Verify both immutability triggers without creating persistent rows:
+%MYSQL% -u root %DB% -e "SELECT TRIGGER_NAME, EVENT_MANIPULATION, ACTION_TIMING FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA='%DB%' AND TRIGGER_NAME IN ('report_snapshots_block_update','report_snapshots_block_delete') ORDER BY TRIGGER_NAME;" 2>&1
+echo   ^> Runtime UPDATE/DELETE behavior is covered transactionally by ReportSnapshotServiceTest.
 echo.
 
 REM --- Section 9: Tests ---
@@ -184,60 +205,27 @@ echo #  SECTION 10: ENCODING GATE (expected: exit 0)
 echo ############################################################
 echo.
 echo [10.1] Running check-encoding.php --path=app:
-if exist ..\employee-evaluation-docs\scripts\check-encoding.php (
-    %PHP% ..\employee-evaluation-docs\scripts\check-encoding.php --path=app 2>&1
+if exist CD-001_delivery\scripts\check-encoding.php (
+    %PHP% CD-001_delivery\scripts\check-encoding.php --path=app 2>&1
 ) else (
-    echo NOTE: check-encoding.php not found at ..\employee-evaluation-docs\scripts\
-    echo       Trying docs repo scripts path...
-    %PHP% ..\employee-evaluation-docs\scripts\check-encoding.php --path=app 2>&1
+    echo ERROR: check-encoding.php not found at CD-001_delivery\scripts\
+    exit /b 1
 )
-echo RESULT[10.1]: exit code = %errorlevel%
+echo RESULT[10.1]: exit code = !errorlevel!
 echo.
 
-REM --- Section 11: Backup ---
+REM --- Section 11: Git state ---
 echo ############################################################
-echo #  SECTION 11: MYSQLDUMP BACKUP
-echo ############################################################
-echo.
-if not exist backups mkdir backups
-set TS=%DATE:~6,4%-%DATE:~3,2%-%DATE:~0,2%_%TIME:~0,2%-%TIME:~3,2%-%TIME:~6,2%
-set TS=%TS: =0%
-set BACKUPFILE=backups\sprint0_backup_%TS%.sql
-echo [11.1] Running mysqldump to %BACKUPFILE%:
-%MYSQLDUMP% -u root --routines --triggers --single-transaction --default-character-set=utf8mb4 --result-file="%BACKUPFILE%" %DB% 2>&1
-if errorlevel 1 (
-    echo RESULT[11.1]: FAIL - mysqldump error
-    set /a FAIL+=1
-) else (
-    echo RESULT[11.1]: PASS
-    set /a PASS+=1
-)
-echo.
-echo [11.2] Backup file size:
-dir "%BACKUPFILE%" 2>&1 | findstr /R "sprint0_backup"
-echo.
-echo [11.3] CREATE TABLE count in backup (expected: many):
-findstr /C:"CREATE TABLE" "%BACKUPFILE%" 2>nul | find /C "CREATE TABLE"
-echo.
-echo [11.4] CREATE TRIGGER count in backup (expected: 6 or more with comments):
-findstr /C:"CREATE TRIGGER" "%BACKUPFILE%" 2>nul | find /C "CREATE TRIGGER"
-echo.
-echo [11.5] report_snapshots table present in backup:
-findstr /C:"report_snapshots" "%BACKUPFILE%" 2>nul | find /C "report_snapshots"
-echo.
-
-REM --- Section 12: Git state ---
-echo ############################################################
-echo #  SECTION 12: GIT STATE
+echo #  SECTION 11: GIT STATE
 echo ############################################################
 echo.
-echo [12.1] Current HEAD (code):
+echo [11.1] Current HEAD (code):
 git rev-parse HEAD 2>&1
 git log --oneline -1 2>&1
 echo.
-echo [12.2] Working tree status:
+echo [11.2] Working tree status:
 git status --short 2>&1
-echo   ^> (empty above = clean)
+echo   ^> Review tracked and untracked entries; local backup files may be untracked.
 echo.
 
 REM --- Summary ---
@@ -253,8 +241,8 @@ echo     - [9.1]  test suite output (look for "109 passed")
 echo     - [10.1] encoding exit code (look for "0")
 echo     - [4.2]  grading_scales count (look for "5")
 echo     - [5.2]  trigger count (look for "6")
-echo     - [8.2]  immutability error (look for "immutable" / 1644)
-echo     - [11.2] backup file size (look for ^> 50000 bytes)
+echo     - [8.1]  both snapshot immutability triggers are listed
+echo     - [0.1]  backup exists and is larger than 50000 bytes before migrations
 echo.
 echo ############################################################
 echo #  END OF REPORT — copy everything above and send it back

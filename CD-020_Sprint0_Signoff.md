@@ -16,7 +16,7 @@
 
 ## ⚠️ إقرار منهجي حرج (Honest Disclosure)
 
-**هذه البيئة (ساندبوكس Next.js) لا تحوي PHP، Composer، MySQL، ولا mysqldump.** لذلك لا يمكنني تشغيل `tests/runner.php` أو `check-encoding.php` (كـ PHP runtime) أو `mysqldump` هنا. 
+**هذه البيئة (ساندبوكس Next.js) لا تحوي PHP، Composer، MySQL، ولا mysqldump.** لذلك لا يمكنني تشغيل `tests/runner.php` أو `check-encoding.php` (كـ PHP runtime) أو `mysqldump` هنا.
 
 قسّمتُ التحقق إلى:
 - **الجزء أ (ثابت — نُفّذ هنا بالكامل ✅):** تحقق المستودع + تحقق المصدر (تحليل الملفات بدون تشغيلها).
@@ -91,13 +91,9 @@ C:\xampp\php\php.exe tests\runner.php
 
 **الأمر 3 — بوابة الترميز:**
 ```bash
-cd C:\xampp\htdocs\employee-evaluation-docs
-C:\xampp\php\php.exe scripts\check-encoding.php --path=app
-# المتوقع: exit code 0 (لا CJK، لا BOM، لا U+FFFD)
-# ملاحظة: --path=app يشير إلى مجلد app/ في مستودع الكود،
-#         نفّذ الأمر من جذر مستودع الكود أو اضبط المسار:
 cd C:\xampp\htdocs\employee-evaluation
-C:\xampp\php\php.exe ..\employee-evaluation-docs\scripts\check-encoding.php --path=app
+C:\xampp\php\php.exe CD-001_delivery\scripts\check-encoding.php --path=app
+# المتوقع: exit code 0 (لا CJK، لا BOM، لا U+FFFD)
 ```
 
 ### ب.2 التحقق من قاعدة البيانات (Database Verification)

@@ -10,7 +10,7 @@
 | **إلى** | كبير المستشارين (إدارة المشروع) |
 | **التاريخ** | 2026-11-03 |
 | **الحالة** | ✅ **مُكتمل — بانتظار اعتمادك للانتقال إلى Sprint 1** |
-| **القاعدة المرجعية** | `employee-evaluation` @ `54ee0e5` (CD-015) · `employee-evaluation-docs` @ `e043aff` (+2 commits محلية) |
+| **القاعدة المرجعية** | `employee-evaluation` @ `54ee0e5` (CD-015) · `employee-evaluation-docs` @ `e043aff` (+3 commits محلية) |
 
 ---
 
@@ -22,13 +22,13 @@
 |---|---|
 | اختبارات | **109/109 PASS** (0 فشل، 0 أخطاء، 0 تخطٍ) |
 | Triggers | **6** (4 صلاحيات + 2 Immutability، كلها `root@localhost`) |
-| Immutability | ✅ محفوز `report_snapshots_block_update/delete` بـ `SIGNAL 45000` |
+| Immutability | ✅ محفوظ `report_snapshots_block_update/delete` بـ `SIGNAL 45000` |
 | بوابة الترميز | ✅ exit=0 (364 ملف، تسرّب 0) |
 | ترحيلات CD-016/017/018 | ✅ مُطبَّقة |
 | master نظيف | ✅ متزامن مع `origin/master` @ `54ee0e5` |
 | OOS-5 محفوظ | ✅ على فرع `wip/oos-5-bulk-operations` (commit `cfad4b2`) |
 | لقطة الاختبار | ✅ أُزيلت + audit_logs موثَّق (id=1425) |
-| نسخ احتياطية | ✅ 5 نسخ (pre-flight → post-cleanup) |
+| نسخ احتياطية | ✅ 6 نسخ موثقة (pre-flight → post-cleanup) |
 
 ---
 
@@ -39,7 +39,7 @@
 | # | الخطوة | النتيجة |
 |---|---|---|
 | 1 | HEAD كود = `54ee0e5` (CD-015) | ✅ `54ee0e5a1bbe0c821d38f66d617fb75fcca0c64d` |
-| 2 | HEAD توثيق = `e043aff` (+1 commit SRS v2.0) | ✅ |
+| 2 | HEAD توثيق = `e043aff` + 3 commits محلية | ✅ |
 | 3 | مساحة عمل الكود نظيفة (tracked) | ✅ |
 | 4 | مساحة عمل التوثيق نظيفة | ✅ |
 | 5 | `phpoffice/phpword ^1.4` في composer.json | ✅ (سطر 18) |
@@ -162,15 +162,16 @@ commit cfad4b2 — wip(OOS-5): preserve bulk operations for users/employees
 
 ---
 
-## 6. جرد النسخ الاحتياطية (5 نسخ)
+## 6. جرد النسخ الاحتياطية (6 نسخ)
 
 | # | الملف | الحجم | الغرض |
 |---|---|---|---|
 | 1 | `sprint0_preflight_2026-11-03_18-29-51.sql` | 172,749 بايت | قبل الترحيلات (الأول) |
 | 2 | `sprint0_postrun_2026-11-03_18-31-16.sql` | 173,814 بايت | بعد التحقق التشغيلي |
 | 3 | `sprint0_precleanup_2026-11-03_19-03-01.sql` | 173,814 بايت | قبل تنظيف لقطة الاختبار |
-| 4 | `sprint0_pretriggerfix_*.sql` | — | قبل تصحيح تعريف المحفّز |
-| 5 | `sprint0_postcleanup_2026-11-03_19-22-54.sql` | 173,950 بايت | بعد التنظيف النهائي (يحوي التعريف الأصلي للمحفّز) |
+| 4 | `sprint0_pretriggerfix_2026-11-03_19-22-14.sql` | 173,946 بايت | قبل المحاولة الأولى لتصحيح تعريف المحفّز |
+| 5 | `sprint0_pretriggerfix_2026-11-03_19-22-27.sql` | 173,949 بايت | قبل إعادة إنشاء المحفّز بالتعريف الصحيح |
+| 6 | `sprint0_postcleanup_2026-11-03_19-22-54.sql` | 173,950 بايت | بعد التنظيف النهائي (يحوي التعريف الأصلي للمحفّز) |
 
 كل النسخ `>50KB` وتحوي `CREATE TABLE`. كلها محلية (غير مرفوعة).
 
@@ -181,13 +182,13 @@ commit cfad4b2 — wip(OOS-5): preserve bulk operations for users/employees
 | الوثيقة | الحالة | المحتوى |
 |---|---|---|
 | `CD-020_SRS_System_Design.md` (v2.0) | ✅ مرفوع GitHub (`e043aff`) | وثيقة التحليل والتصميم الشاملة |
-| `CD-020_Sprint0_Signoff.md` | مُلتزَم محلياً (`de41e39`) | تقرير التحقق الثابت + أوامر XAMPP |
-| `CD-020_Sprint0_PostVerification_Directive.md` | مُلتزَم محلياً (`de41e39`) | التوجيه الأول للمساعد (المعوقان A+B) |
-| `CD-020_Sprint0_Directive_2_CorrectionAndPreservation.md` | staged | التوجيه التصحيحي (طريقة SQL + حفظ OOS-5) |
-| `scripts/sprint0_verify.bat` | مُلتزَم محلياً (`de41e39`) | سكربت تحقق موحَّد (12 قسماً) |
-| `CD-020_Sprint0_Signoff_FINAL.md` | (هذه الوثيقة) | التقرير النهائي للاعتماد |
+| `CD-020_Sprint0_Signoff.md` | مُلتزَم محلياً (`b094cae`) | تقرير التحقق الثابت + أوامر XAMPP |
+| `CD-020_Sprint0_PostVerification_Directive.md` | مُلتزَم محلياً (`b094cae`) | التوجيه الأول للمساعد (المعوقان A+B) |
+| `CD-020_Sprint0_Directive_2_CorrectionAndPreservation.md` | مُلتزَم محلياً (`2fbf541`) | التوجيه التصحيحي (طريقة SQL + حفظ OOS-5) |
+| `scripts/sprint0_verify.bat` | أُضيف في `b094cae` وصُحح بعد المراجعة | سكربت تحقق موحَّد |
+| `CD-020_Sprint0_Signoff_FINAL.md` | أُضيف في `2fbf541` وصُحح بعد المراجعة | التقرير النهائي للاعتماد |
 
-> كل الوثائق محفوظة في مستودع التوثيق، بانتظار PAT لرفع ما لم يُرفع بعد.
+> أضيفت الوثائق إلى فرع `master` في مستودع التوثيق؛ راجع سجل Git لمعرفة حالة نشر كل commit.
 
 ---
 
@@ -221,7 +222,7 @@ commit cfad4b2 — wip(OOS-5): preserve bulk operations for users/employees
 - [x] المعوق B (OOS-5 محفوظ + master نظيف) — مُغلق
 - [x] 109/109 اختبار PASS على master النظيف
 - [x] 6 Triggers مع DEFINER صحيح
-- [x] نسخ احتياطية موثّقة (5 نسخ)
+- [x] نسخ احتياطية موثّقة (6 نسخ)
 - [ ] **اعتماد كبير المستشارين** على هذا التقرير ← **بانتظارك**
 
 بمجرّد اعتمادك، أبدأ **Sprint 1** (إغلاق الاكتشافات الجديدة الثلاثة):
